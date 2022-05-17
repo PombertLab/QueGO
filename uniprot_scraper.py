@@ -21,14 +21,14 @@ COMMAND		{name} \\
 
 
 OPTIONS
--g (--go_annotation)		Gene ontoloy keyword to search
+-g (--go_keyword)		Gene ontoloy keyword to search
 -v (--verified_only)		Get downloads for genes that have been verified by UniProt
 -s (--structures)		Find accessions with 3D structures
 -ds (--dwnld_strts)		Download 3D structures
 -df (--dwnld_fasta)		Download FASTA files
 -m (--method)			Method used to obtain structure [Default = All] (i.e., X-ray, NMR)
--c (--custom)			Custom UniProt search
 -o (--outdir)			Output directory for downloading files [Default = ./UNIPROT_SCRAP_RESULTS]
+-c (--custom)			Custom UniProt search
 
 """
 
@@ -56,8 +56,8 @@ parser.add_argument("-ds","--download_structures",action='store_true')
 parser.add_argument("-df","--download_fasta",action='store_true')
 parser.add_argument("-f","--fasta",action='store_true')
 parser.add_argument("-m","--method")
-parser.add_argument("-c","--custom")
 parser.add_argument("-o","--outdir",default="./UNIPROT_SCRAP_RESULTS")
+parser.add_argument("-c","--custom")
 
 args = parser.parse_args()
 
@@ -68,11 +68,10 @@ structures = args.structures
 download_structures = args.download_structures
 download_fasta = args.download_fasta
 method = args.method
-custom = args.custom
 outdir = args.outdir
+custom = args.custom
 fastadir = outdir + "/FASTA"
 pdbdir = outdir + "/PDBs"
-
 
 LOG = open(f"{outdir}/search.log", "w")
 
