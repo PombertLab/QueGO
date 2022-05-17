@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 ## Pombert Lab 2022
-my $name = "run_Queri3D.pl";
-my $version = "0.5f";
+my $name = "run_QueGO.pl";
+my $version = "0.5.7";
 my $updated = "2022-05-05";
 
 use strict;
@@ -25,7 +25,7 @@ USAGE		$name \\
 		  -m "X-ray" \\
 		  -p E_cuniculi_3D_structs \\
 		  -t 4 \
-		  -o Queri3D_telomere_Results
+		  -o QueGO_telomere_Results
 
 OPTIONS
 -g (--go_annotation)		Search using gene ontolgy keyword
@@ -34,7 +34,7 @@ OPTIONS
 -p (--predictions)		Directories containing predicted protein structures
 -a (--archives)		GESAMT created archives
 -t (--threads)			Number of threads to use [Default = 4]
--o (--outdir)			Output directory [Default = Queri3D_Results]
+-o (--outdir)			Output directory [Default = QueGO_Results]
 EXIT
 
 die("\n$usage\n") unless(@ARGV);
@@ -53,7 +53,7 @@ my $method;
 my @predictions;
 my @archives;
 my $threads = 4;
-my $outdir = "Queri3D_Results";
+my $outdir = "QueGO_Results";
 
 GetOptions(
 	'g|go_annotations=s' => \$go_annotation,
@@ -81,7 +81,7 @@ foreach my $dir (@dirs){
 }
 
 my $start = localtime();
-open LOG, ">", "$outdir/run_Queri3D.log" or die("Unable to open $outdir/run_Queri3D.log: $!\n");
+open LOG, ">", "$outdir/run_QueGO.log" or die("Unable to open $outdir/run_QueGO.log: $!\n");
 print LOG "$0 started on $start\n";
 
 $start = localtime();
