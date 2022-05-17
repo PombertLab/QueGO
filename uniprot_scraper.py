@@ -1,8 +1,8 @@
 #!/usr/bin/python
 
 name = "uniprot_scraper.py"
-version = "0.5"
-updated = "2022-04-25"
+version = "0.5.1"
+updated = "2022-05-17"
 
 usage = f"""\n
 NAME		{name}
@@ -78,7 +78,7 @@ LOG = open(f"{outdir}/search.log", "w")
 
 LOG.write(f"{argv[0]}\n")
 
-## Prepare key words for searching
+## Prepare keywords for searching
 keywords = ""
 
 if(go_annotation):
@@ -404,12 +404,5 @@ stop = time.strftime("%Y-%m-%d, %H:%M:%S",time.localtime())
 
 LOG.write(f"Start\t{start}\nStop\t{stop}\n")
 
-with open(f"{outdir}/metadata.log","w") as METADATA:
-	for key in metadata.keys():
-		METADATA.writelines(f"{key}\t{metadata[key][0]}\t{metadata[key][1]}\n")
-		METADATA.writelines(f"\tFASTA\n")
-		for fasta in metadata[key][2]:
-			METADATA.writelines(f"\t\t{fasta}\n")
-		METADATA.writelines(f"\tSTRUCTURE\n")
-		for struct in metadata[key][3]:
-			METADATA.writelines(f"\t\t{struct}\n")
+## Create an archive for later use
+system(f"tar -czf {outdir}.tar.gz {outdir}")
