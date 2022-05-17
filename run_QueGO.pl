@@ -2,7 +2,7 @@
 ## Pombert Lab 2022
 my $name = "run_QueGO.pl";
 my $version = "0.5.7";
-my $updated = "2022-05-05";
+my $updated = "2022-05-17";
 
 use strict;
 use warnings;
@@ -29,7 +29,7 @@ USAGE		$name \\
 
 OPTIONS
 -g (--go_annotation)		Search using gene ontolgy keyword
--v (--verified_only)		Search for genes that have been verified by UniProt
+-v (--verified_only)		Search for genes that have been verified by experimental evidence
 -m (--method)			Method used to obtain structure [Default = All] (i.e., X-ray, NMR)
 -p (--predictions)		Directories containing predicted protein structures
 -a (--archives)		GESAMT created archives
@@ -56,7 +56,7 @@ my $threads = 4;
 my $outdir = "QueGO_Results";
 
 GetOptions(
-	'g|go_annotations=s' => \$go_annotation,
+	'g|go_keyword=s' => \$go_annotation,
 	'v|verfied_only' => \$verified_only,
 	'm|method=s' => \$method,
 	'p|predictions=s{1,}' => \@predictions,
@@ -92,7 +92,7 @@ unless(-f "$uniprot_dir/metadata.log"){
 	my $flags = "";
 	
 	if($go_annotation){
-		$flags .= "--go_annotation $go_annotation ";
+		$flags .= "--go_keyword $go_annotation ";
 	}
 
 
