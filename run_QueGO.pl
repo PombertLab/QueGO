@@ -153,7 +153,8 @@ if(@predictions||@archives){
 		my ($archive_path) = abs_path($archive);
 		my ($archive_name) = $archive_path =~ /\/(\w+)\/*$/;
 		unless(-d "$archives_dir/$archive_name"){
-			system "ln -s $archive_path $archives_dir/$archive_name";
+			system "cp -r $archive_path $archives_dir/$archive_name";
+			print "Copying pre-compiled GESAMT archive $archive_name!\n";
 		}
 		$archives{$archive_name} = "$archives_dir/$archive_name";
 	}
@@ -212,6 +213,7 @@ if(@predictions||@archives){
 
 	$stop = localtime();
 	print LOG "\nGESAMT searches completed on $stop\n";
+	print "GESAMT searches completed!\n";
 
 	###################################################################################################
 	## parse_GESAMT_results.pl query search
@@ -219,6 +221,7 @@ if(@predictions||@archives){
 
 	$stop = localtime();
 	print LOG "\nStarted parsing results on $stop\n";
+	print "Parsing GESAMT results!\n";
 
 	system "$parser_script \\
 			--results @results \\
@@ -227,6 +230,7 @@ if(@predictions||@archives){
 
 	$stop = localtime();
 	print LOG "\nFinished parsing results on $stop\n";
+	print "Finished parsing GESAMT results!\n";
 
 	###################################################################################################
 	## add_metadata_to_results.pl query search
@@ -234,6 +238,7 @@ if(@predictions||@archives){
 
 	$start = localtime();
 	print LOG "\nStarted adding metadata to results on $start\n";
+	print "Adding metadata to GESAMT results!\n";
 
 	system "$metadata_script \\
 			--metadata $uniprot_dir/metadata.log \\
