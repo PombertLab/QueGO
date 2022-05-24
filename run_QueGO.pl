@@ -1,8 +1,8 @@
 #!/usr/bin/perl
 ## Pombert Lab 2022
 my $name = "run_QueGO.pl";
-my $version = "0.5.7";
-my $updated = "2022-05-17";
+my $version = "0.6";
+my $updated = "2022-05-24";
 
 use strict;
 use warnings;
@@ -24,17 +24,18 @@ USAGE		$name \\
 		  -v \\
 		  -m "X-ray" \\
 		  -p E_cuniculi_3D_structs \\
-		  -t 4 \
+		  -t 4 \\
 		  -o QueGO_telomere_Results
 
 OPTIONS
--g (--go_annotation)		Search using gene ontolgy keyword
--v (--verified_only)		Search for genes that have been verified by experimental evidence
--m (--method)			Method used to obtain structure [Default = All] (i.e., X-ray, NMR)
--p (--predictions)		Directories containing predicted protein structures
+-g (--go_annotation)	Search using gene ontolgy keyword
+-v (--verified_only)	Search for genes that have been verified by experimental evidence
+-m (--method)		Method used to obtain structure [Default = All] (i.e., X-ray, NMR)
+-p (--predictions)	Directories containing predicted protein structures
 -a (--archives)		GESAMT created archives
--t (--threads)			Number of threads to use [Default = 4]
--o (--outdir)			Output directory [Default = QueGO_Results]
+-u (--uniprot)		Previously used UNIPROT_SCRAP_RESULTS
+-t (--threads)		Number of threads to use [Default = 4]
+-o (--outdir)		Output directory [Default = QueGO_Results]
 EXIT
 
 die("\n$usage\n") unless(@ARGV);
@@ -53,6 +54,7 @@ my $method;
 my @predictions;
 my @archives;
 my $threads = 4;
+my $uniprot;
 my $outdir = "QueGO_Results";
 
 GetOptions(
@@ -62,6 +64,7 @@ GetOptions(
 	'p|predictions=s{1,}' => \@predictions,
 	'a|archive=s{1,}' => \@archives,
 	't|threads=s' => \$threads,
+	'u|uniprot=s' => \$uniprot,
 	'o|outdir=s' => \$outdir,
 	'c|custom=s' => \$custom, ## shhh, this is a secret tool for debugging purposes
 );
@@ -84,10 +87,15 @@ my $start = localtime();
 open LOG, ">", "$outdir/run_QueGO.log" or die("Unable to open $outdir/run_QueGO.log: $!\n");
 print LOG "$0 started on $start\n";
 
-$start = localtime();
-print LOG "\nUniProt scraping started on $start\n";
 
-unless(-f "$uniprot_dir/metadata.log"){
+if (-f "$uniprot"){
+	system "cp -r $uniprot/* $uniprot_dir/";
+}
+
+unless (-f "$uniprot_dir/metadata.log"){
+	
+	$start = localtime();
+	print LOG "\nUniProt scraping started on $start\n";
 
 	my $flags = "";
 	
