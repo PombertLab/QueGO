@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 ## Pombert Lab 2022
 my $name = "run_QueGO.pl";
-my $version = "0.6.1";
+my $version = "0.6.2";
 my $updated = "2022-05-24";
 
 use strict;
@@ -93,12 +93,12 @@ print LOG "$0 started on $start\n";
 ###################################################################################################
 
 ### Use previously used scrap results
-if (-f "$uniprot"){
+if (-d "$uniprot"){
 	print "Running QueGO on an existing UniProt Scrap!\n";
 	system "cp -r $uniprot/* $uniprot_dir/";
 }
 ### Perform UniProt scraping
-else{
+elsif($go_annotation){
 	### Check if scrap has been done previously
 	unless (-f "$uniprot_dir/metadata.log"){
 		
@@ -145,6 +145,10 @@ else{
 		print "UniProt download completed previous! Moving to Homology Search!\n";
 	}
 
+}
+else{
+	print "\n[E]  Please provide a GO keyword or UNIPROT_SCRAP_RESULTS directory!\n";
+	exit();
 }
 
 
