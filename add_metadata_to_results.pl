@@ -2,8 +2,8 @@
 ## Pombert Lab 2022
 
 my $name = 'add_metadata_to_results.pl';
-my $version = '0.5';
-my $updated = '2022-05-05';
+my $version = '0.5.1';
+my $updated = '2022-05-24';
 
 use strict;
 use warnings;
@@ -31,7 +31,8 @@ my $output = "results.tsv";
 
 GetOptions(
 	'p|parsed=s' => \$parsed_file,
-	'm|meta=s' => \$metadata_file,
+	'm|metadata=s' => \$metadata_file,
+	'o|outfile=s' => \$output,
 );
 
 my %metadata;
