@@ -1,8 +1,8 @@
 #!/usr/bin/python
 
 name = "uniprot_scraper.py"
-version = "0.5.1"
-updated = "2022-05-17"
+version = "0.5.2"
+updated = "2022-05-24"
 
 usage = f"""\n
 NAME		{name}
@@ -314,12 +314,13 @@ for accession in Downloads:
 
 		fasta_name = re.search("\/(\w+\.fasta)$",link).groups(0)[0]
 		
+		SOURCES.write(f"\t{link}\n")
+		METADATA.write(f"\t\t{fasta_name}\n")
+
 		## Download the FASTA file if not already
 		if not path.exists(f"{fastadir}/{fasta_name}"):
 			system(f"wget {link} -O {fastadir}/{fasta_name} 1>/dev/null 2>>{outdir}/download.errors")
 
-		SOURCES.write(f"\t{link}\n")
-		METADATA.write(f"\t\t{fasta_name}\n")
 	
 	SOURCES.write("STRUCTURE:\n")
 	METADATA.write(f"\tSTRUCTURE\n")
