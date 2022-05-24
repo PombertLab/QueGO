@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 ## Pombert Lab 2022
 my $name = "run_QueGO.pl";
-my $version = "0.6";
+my $version = "0.6.1";
 my $updated = "2022-05-24";
 
 use strict;
@@ -84,64 +84,74 @@ foreach my $dir (@dirs){
 }
 
 my $start = localtime();
+my $stop;
 open LOG, ">", "$outdir/run_QueGO.log" or die("Unable to open $outdir/run_QueGO.log: $!\n");
 print LOG "$0 started on $start\n";
 
+###################################################################################################
+## Gathering UniProt keyword results
+###################################################################################################
 
+### Use previously used scrap results
 if (-f "$uniprot"){
+	print "Running QueGO on an existing UniProt Scrap!\n";
 	system "cp -r $uniprot/* $uniprot_dir/";
 }
-
-unless (-f "$uniprot_dir/metadata.log"){
-	
-	$start = localtime();
-	print LOG "\nUniProt scraping started on $start\n";
-
-	my $flags = "";
-	
-	if($go_annotation){
-		$flags .= "--go_keyword $go_annotation ";
-	}
-
-
-	if($method){
-		$flags .= "--method $method ";
-	}
-
-	if($verified_only){
-		$flags .= "-v";
-	}
-
-	if($custom){
-		$flags = "-c '$custom'";
-	}
-
-	system "$scraper_script \\
-			  --outdir $outdir/UNIPROT_SCRAP_RESULTS \\
-			  -df \\
-			  -ds \\
-			  -s \\
-			  $flags
-	";
-
-}
+### Perform UniProt scraping
 else{
-	print "UniProt download completed previous! Moving to Homology Search!\n";
+	### Check if scrap has been done previously
+	unless (-f "$uniprot_dir/metadata.log"){
+		
+		$start = localtime();
+		print LOG "\nUniProt scraping started on $start\n";
+
+		my $flags = "";
+		
+		if($go_annotation){
+			$flags .= "--go_keyword $go_annotation ";
+		}
+
+
+		if($method){
+			$flags .= "--method $method ";
+		}
+
+		if($verified_only){
+			$flags .= "-v";
+		}
+
+		if($custom){
+			$flags = "-c '$custom'";
+		}
+
+		system "$scraper_script \\
+				--outdir $outdir/UNIPROT_SCRAP_RESULTS \\
+				-df \\
+				-ds \\
+				-s \\
+				$flags
+		";
+
+		unless(-f "$uniprot_dir/metadata.log"){
+			print LOG "\nUniProt scraping failed on $stop";
+			exit;
+		}
+
+		$stop = localtime();
+		print LOG "\nUniProt scraping completed on $stop\n";
+
+	}
+	else{
+		print "UniProt download completed previous! Moving to Homology Search!\n";
+	}
+
 }
 
-my $stop = localtime();
-
-unless(-f "$uniprot_dir/metadata.log"){
-	print LOG "\nUniProt scraping failed on $stop";
-	exit;
-}
-
-print LOG "\nUniProt scraping completed on $stop\n";
 
 if(@predictions||@archives){
 
 	###################################################################################################
-	## run_GESAMT.pl make archives
+	## Preparing 3D homology GESAMT archives
 	###################################################################################################
 	
 	$start = localtime();
@@ -149,6 +159,7 @@ if(@predictions||@archives){
 
 	my %archives;
 
+	### Copy pre-existing archives to new work enviroment
 	foreach my $archive (@archives){
 		my ($archive_path) = abs_path($archive);
 		my ($archive_name) = $archive_path =~ /\/(\w+)\/*$/;
@@ -159,6 +170,7 @@ if(@predictions||@archives){
 		$archives{$archive_name} = "$archives_dir/$archive_name";
 	}
 
+	### Make GESAMT archive from predicted files
 	foreach my $predictor_dir (@predictions){
 		my ($predictor) = $predictor_dir =~ /\/(\w+)\/*$/;
 		unless(-d "$archives_dir/$predictor"){
@@ -180,7 +192,7 @@ if(@predictions||@archives){
 	print LOG "\nArchive creation completed on $stop\n";
 
 	###################################################################################################
-	## run_GESAMT.pl query search
+	## Perform 3D homology searches
 	###################################################################################################
 
 	$start = localtime();
@@ -216,7 +228,7 @@ if(@predictions||@archives){
 	print "GESAMT searches completed!\n";
 
 	###################################################################################################
-	## parse_GESAMT_results.pl query search
+	## Parse GESAMT results
 	###################################################################################################
 
 	$stop = localtime();
@@ -233,7 +245,7 @@ if(@predictions||@archives){
 	print "Finished parsing GESAMT results!\n";
 
 	###################################################################################################
-	## add_metadata_to_results.pl query search
+	## Add metadata to GESAMT results
 	###################################################################################################
 
 	$start = localtime();
