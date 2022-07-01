@@ -49,7 +49,7 @@ pipeline_location = os.path.dirname(argv[0])
 
 ## Setup GetOptions
 parser = argparse.ArgumentParser(usage=usage)
-parser.add_argument("-g","--go_annotation")
+parser.add_argument("-g","--go_keyword")
 parser.add_argument("-v","--verified_only",action='store_true')
 parser.add_argument("-s","--structures",action='store_true')
 parser.add_argument("-ds","--download_structures",action='store_true')
@@ -62,7 +62,7 @@ parser.add_argument("-c","--custom")
 args = parser.parse_args()
 
 ## Acquire argparse options
-go_annotation = args.go_annotation
+go_keyword = args.go_keyword
 reviewed = args.verified_only
 structures = args.structures
 download_structures = args.download_structures
@@ -80,8 +80,8 @@ LOG.write(f"{argv[0]}\n")
 ## Prepare keywords for searching
 keywords = []
 
-if(go_annotation):
-	keywords.append(f"(go:{go_annotation})")
+if(go_keyword):
+	keywords.append(f"(go:{go_keyword})")
 if(structures):
 	keywords.append("(structure_3d:true)")
 if(reviewed):
