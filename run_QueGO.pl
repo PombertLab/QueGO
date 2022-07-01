@@ -93,9 +93,11 @@ print LOG "$0 started on $start\n";
 ###################################################################################################
 
 ### Use previously used scrap results
-if (-d "$uniprot_dir"){
+if ("$uniprot"){
 	print "Running QueGO on an existing UniProt Scrap!\n";
-	system "cp -r $uniprot/* $uniprot_dir/";
+	if (-d "$uniprot"){
+		system "cp -r $uniprot/* $uniprot_dir/";
+	}
 }
 ### Perform UniProt scraping
 elsif($go_annotation){
