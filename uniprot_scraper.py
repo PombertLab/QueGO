@@ -32,7 +32,6 @@ OPTIONS
 
 """
 
-from operator import delitem
 from sys import exit,argv
 
 # if (len(argv) == 1):
@@ -41,11 +40,9 @@ from sys import exit,argv
 
 import re
 import os
-import time
 import argparse
 from os import system, mkdir, path
-
-from sympy import sequence
+from time import strftime, localtime, time
 
 
 pipeline_location = os.path.dirname(argv[0])
@@ -112,7 +109,7 @@ from selenium.webdriver.support.ui import WebDriverWait, Select
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.firefox.options import Options
 
-start = time.strftime("%Y-%m-%d, %H:%M:%S",time.localtime())
+start = strftime("%Y-%m-%d, %H:%M:%S",localtime())
 
 ## Creating web scraper
 options = Options()
@@ -156,9 +153,16 @@ buttons = divs[[i.get_attribute("class") for i in divs].index("button-group GUgb
 buttons[[i.text for i in buttons].index("Download")].click()
 
 ## Waiting for sidebar to load in
-time.sleep(1)
 
-download_panel = driver.find_element_by_css_selector("aside")
+download_panel = ""
+
+while True:
+	try:
+		download_panel = driver.find_element_by_css_selector("aside")
+		break
+	except:
+		next
+
 panel_content = download_panel.find_element_by_class_name("sliding-panel__content")
 fields = panel_content.find_elements_by_css_selector("fieldset")
 
@@ -171,8 +175,11 @@ options[[i.text for i in options].index("No")].click()
 sections = panel_content.find_elements_by_css_selector("section")
 download = sections[[i.get_attribute("class") for i in sections].index("button-group sliding-panel__button-row rUH91 dx6Wo")].find_element_by_css_selector("a").get_attribute("href")
 
+## Downloading list of accession that match the searched parameters
 system(f"wget \"{download}\" -O {outdir}/accessions.list 1>/dev/null 2>error.log")
 
+
+## Parse list of accessions
 accession_numbers = []
 
 FILE = open(f"{outdir}/accessions.list","r")
@@ -181,31 +188,30 @@ for accession in FILE:
 	accession_numbers.append([accession,f"https://www.uniprot.org/uniprotkb/{accession}/entry"])
 FILE.close()
 
+## Begin trolling accession pages for metadata and links
+
 metadata = {}
 Downloads = {}
 
 for accession,page in accession_numbers:
 
-	## Store ["METADAT",[FASTA_LINKS],[STRUCTURE_LINKS]]
+	## Store ["METADATA",[STRUCTURE_LINKS]]
 	info = ["",[]]
 
-	## Get accession number and go to its page
-	accession = accession
-
-	## Metadata
+	## Jump to Names & Taxonomy section to get metadata
 	driver.get(f"{page}#names_and_taxonomy")
 
 	names_info = driver.find_element_by_id("names_and_taxonomy")
 	name_content = ""
+
+	## Things load slow, so just keep trying
+
 	while True:
-
 		try:
-
 			name_content = names_info.find_element_by_class_name("card__content")
 			break
 		
 		except:
-
 			next
 
 
