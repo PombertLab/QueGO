@@ -1,7 +1,7 @@
 #!/usr/bin/python
 
 name = "uniprot_scraper.py"
-version = "1.0.0"
+version = "1.5.0"
 updated = "2022-07-01"
 
 usage = f"""\n
@@ -17,7 +17,7 @@ COMMAND		{name} \\
 		  -ds \\
 		  -df \\
 		  -m X-ray \\
-		  -c '(reviewed:yes)AND(organism:"Drosophila melanogaster (Fruit fly) [7227]")AND(structure_3d:true)'
+		  -c '(go:toll)AND(reviewed:true)AND(organism_id:7227)'
 
 
 OPTIONS
@@ -32,20 +32,24 @@ OPTIONS
 
 """
 
+def die(string):
+	exit(string)
+
+import struct
 from sys import exit,argv
 
-# if (len(argv) == 1):
-#     print(f"{usage}")
-#     exit()
+if (len(argv) == 1):
+	die(f"{usage}")
 
 import re
-import os
 import argparse
-from os import system, mkdir, path
-from time import strftime, localtime, time
+from os import system, mkdir, path, listdir
+from time import sleep
+from datetime import datetime
 
+start_time = datetime.today()
 
-pipeline_location = os.path.dirname(argv[0])
+pipeline_location = path.dirname(argv[0])
 
 ## Setup GetOptions
 parser = argparse.ArgumentParser(usage=usage)
@@ -73,9 +77,50 @@ custom = args.custom
 fastadir = outdir + "/FASTA"
 pdbdir = outdir + "/PDBs"
 
-LOG = open(f"{outdir}/search.log", "w")
+## Setup working directory
+if not (path.exists(outdir)):
+	mkdir(outdir)
+	mkdir(fastadir)
 
-LOG.write(f"{argv[0]}\n")
+if not (path.exists(fastadir)):
+	mkdir(fastadir)
+
+if not (path.exists(pdbdir)):
+	mkdir(pdbdir)
+
+## Loading all the necessary packages for web scraping
+from selenium import webdriver 
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait, Select
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.firefox.options import Options
+
+###################################################################################################
+## Begin logging
+###################################################################################################
+
+## OPS stores basic operational information
+OPS = open(f"{outdir}/uniprot_scraper.log","w")
+OPS.write(f">NAME\n  {name}\n\n")
+OPS.write(f">VERSION\n  {version}\n\n")
+
+## META stores the accession numbers, the organism names, the FASTA and 3D Structure links, and 3D structure features
+META = open(f"{outdir}/metadata.log","w")
+
+###################################################################################################
+## Setting up webscaper object
+###################################################################################################
+
+## Create options for the scraper (really only used to make it headless)
+options = Options()
+options.headless = True
+
+## Create the scraper object
+driver = webdriver.Firefox(options=options,service_log_path=path.devnull)
+
+## Setting up the results url using keywords
+url = "https://www.uniprot.org/uniprotkb?query="
 
 ## Prepare keywords for searching
 keywords = []
@@ -88,52 +133,38 @@ if(reviewed):
 	keywords.append("(reviewed:true)")
 
 ## If a custom search phrase is provided, overwrite keywords
+
+OPS.write(f">KEYWORDS\n")
+
 if(custom):
-	keywords = custom
+	url = url + custom
+	OPS.write(f"  {custom}\n\n")
+else:
+	url = url + keywords[0]
+	OPS.write(f"  {keywords[0]}\n")
+	for ops in keywords[1:]:
+		url = url + "AND" + ops
+		OPS.write(f"  {ops}\n")
+	OPS.write(f"\n")
 
-if not (os.path.exists(outdir)):
-	os.mkdir(outdir)
-	os.mkdir(fastadir)
-
-if not (os.path.exists(fastadir)):
-	os.mkdir(fastadir)
-
-if not (os.path.exists(pdbdir)):
-	os.mkdir(pdbdir)
-
-## Loading all the necessary packages for web scraping
-from selenium import webdriver 
-from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait, Select
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.firefox.options import Options
-
-start = strftime("%Y-%m-%d, %H:%M:%S",localtime())
-
-## Creating web scraper
-options = Options()
-options.headless = True
-driver = webdriver.Firefox(options=options,service_log_path=os.path.devnull)
-
-url = "https://www.uniprot.org/uniprotkb?query="
-
-url = url + keywords[0]
-
-for ops in keywords[1:]:
-	url = url + "AND" + ops
-
-# LOG.write(f"Source from {url}\n")
-# LOG.write(f"Keywords\n\t{keywords}\n")
+OPS.write(f">SEARCH_URL\n  {url}\n\n")
+OPS.write(f">LAUNCHED\n  {start_time.strftime('%Y-%m-%d %H:%M:%S')}\n\n")
 
 print(f"\nConnecting to {url}")
 
-## Connect to UniProt
-driver.get(url)
+###################################################################################################
+## Acquire accessions list for given keywords
+###################################################################################################
 
-####################################################
-##### All waiting times are set to 10 mins max #####
-####################################################
+### When the following structure is seen, we are waiting for things to load in
+## try:
+##		some command
+##		break
+## except:
+##		next
+
+## Connect to UniProt results page
+driver.get(url)
 
 ## Remove annoying display preference option provided by new UniProt site if it exists
 try:
@@ -143,20 +174,19 @@ try:
 			item.click()
 			break
 	element.find_element_by_css_selector("button").click()
-
 except:
 	next
 
+## Open the download options bar
 section = driver.find_element_by_class_name("sidebar-layout__content")
 divs = section.find_elements_by_css_selector("div")
 buttons = divs[[i.get_attribute("class") for i in divs].index("button-group GUgbz")].find_elements_by_css_selector("button")
 buttons[[i.text for i in buttons].index("Download")].click()
 
 ## Waiting for sidebar to load in
-
 download_panel = ""
-
 while True:
+	sleep(1)
 	try:
 		download_panel = driver.find_element_by_css_selector("aside")
 		break
@@ -166,18 +196,35 @@ while True:
 panel_content = download_panel.find_element_by_class_name("sliding-panel__content")
 fields = panel_content.find_elements_by_css_selector("fieldset")
 
-options = fields[0].find_elements_by_css_selector("option")
-options[[i.text for i in options].index("List")].click()
+## Changing download to accession only List
+while True:
+	sleep(1)
+	try:
+		options = fields[0].find_elements_by_css_selector("option")
+		options[[i.text for i in options].index("List")].click()
+		break
+	except:
+		next
 
-options = fields[1].find_elements_by_css_selector("label")
-options[[i.text for i in options].index("No")].click()
+## Changing download to decompressed type (not a large download, doesn't really matter)
+while True:
+	sleep(1)
+	try:
+		options = fields[1].find_elements_by_css_selector("label")
+		options[[i.text for i in options].index("No")].click()
+		break
+	except:
+		next
 
 sections = panel_content.find_elements_by_css_selector("section")
 download = sections[[i.get_attribute("class") for i in sections].index("button-group sliding-panel__button-row rUH91 dx6Wo")].find_element_by_css_selector("a").get_attribute("href")
 
 ## Downloading list of accession that match the searched parameters
-system(f"wget \"{download}\" -O {outdir}/accessions.list 1>/dev/null 2>error.log")
+system(f"wget \"{download}\" -O {outdir}/accessions.list 1>/dev/null 2>>{outdir}/download.error")
 
+###################################################################################################
+## Scraping accession pages for metadata
+###################################################################################################
 
 ## Parse list of accessions
 accession_numbers = []
@@ -190,23 +237,27 @@ FILE.close()
 
 ## Begin trolling accession pages for metadata and links
 
-metadata = {}
-Downloads = {}
+print("\nAcquiring metadata:")
 
+scrap_results = {}
 for accession,page in accession_numbers:
 
-	## Store ["METADATA",[STRUCTURE_LINKS]]
-	info = ["",[]]
+	## acession = [FASTA link,features,[structures]]
+	scrap_results[accession] = [f"https://rest.uniprot.org/uniprotkb/{accession}.fasta","",[]]
 
+	##################################################
+	## Name and Taxonomy Metadata
+	##################################################
+	
 	## Jump to Names & Taxonomy section to get metadata
 	driver.get(f"{page}#names_and_taxonomy")
 
 	names_info = driver.find_element_by_id("names_and_taxonomy")
 	name_content = ""
 
-	## Things load slow, so just keep trying
-
+	## Wait for Names & Taxonomy content to load
 	while True:
+		sleep(1)
 		try:
 			name_content = names_info.find_element_by_class_name("card__content")
 			break
@@ -217,178 +268,198 @@ for accession,page in accession_numbers:
 
 	list_content = name_content.find_elements_by_css_selector("div.card__content > ul")
 
+	## Index of protein info in list_content
 	protein_index = [i.get_attribute("data-article-id") for i in name_content.find_elements_by_css_selector("h3")].index("protein_names")
+	## Index of name info in list_content
 	name_index = [i.get_attribute("data-article-id") for i in name_content.find_elements_by_css_selector("h3")].index("organism-name")
 
+	## Get protein name
 	prot_name = list_content[protein_index].find_element_by_css_selector("strong").text
-
+	prot_name = prot_name.replace("\n","")
+	## Remove "curate" and "publication" text from the protein name as it is not relevant!
 	for alt in list_content[protein_index].find_element_by_css_selector("strong").find_elements_by_css_selector("button"):
 		prot_name = prot_name.replace(alt.text,"")
 
-	prot_name = prot_name.replace("\n","")
-
+	## Get organism name
 	org_name = list_content[name_index].find_element_by_css_selector("a").text
+
+	META.write(f">{accession}\n")
+	META.write(f"\tPROTEIN_NAME\n\t\t{prot_name}\n")
+	META.write(f"\tORGANISM_NAME\n\t\t{org_name}\n")
+	META.write(f"\tFASTA\n\t\thttps://rest.uniprot.org/uniprotkb/{accession}.fasta\n")
 	
-	info[0] = org_name
-	metadata[accession] = [org_name,prot_name,[],[]]
+	print(f"\t{accession} ({prot_name})")
 
-	print(f"Visiting page for {accession}\t{prot_name}")
+	##################################################
+	## Structure Metadata
+	##################################################
 
-	results = ""
-
+	## Jump to Structure section to get metadata
+	driver.get(f"{page}#structure")
+	
+	## Get feature results
+	attributes = False
 	while True:
-
-		time.sleep(1)
-
+		sleep(1)
 		try:
+			structure_card = driver.find_element_by_id("structure")
+			structure_display = structure_card.find_element_by_class_name("card__content")
+			headers = [i.text for i in structure_display.find_elements_by_css_selector("h3")]
+			if "Features" in headers:
+				attributes = True
+			break
+		except:
+			next
 
-			driver.get(f"{page}#structure")
+	META.write(f"\tFEATURES\n")
+	if attributes:
+
+		struct_atts = {}
+
+		feature_table = structure_display.find_elements_by_css_selector("protvista-datatable")[-1]
+		table_object = feature_table.find_element_by_css_selector("table > tbody")
+		feature_results = table_object.find_elements_by_css_selector("tr")
+		
+		for result in feature_results:
+			if "hidden" not in result.get_attribute("class"):
+				feat = result.find_element_by_css_selector("td:nth-child(2)").text
+				if feat not in struct_atts.keys():
+					struct_atts[feat] = 0
+				struct_atts[feat] += 1
+		
+		for key in sorted(struct_atts.keys()):
+			META.write(f"\t\t{key.upper()}:{struct_atts[key]}\n")
+		
+		scrap_results[accession][1] = struct_atts
+
+	else:
+		META.write(f"\t\tN\A\n")
+
+
+	## Get structure results
+	results = False
+	while True:
+		sleep(1)
+		try:
 			structure_card = driver.find_element_by_id("structure")
 			structure_display = structure_card.find_element_by_class_name("card__content")
 			table_structure = structure_display.find_element_by_css_selector("protvista-uniprot-structure")
 			table = table_structure.find_element_by_css_selector("table > tbody")
 			results  = table.find_elements_by_css_selector("tr")
 			break
-
 		except:
 			next
 
-	for result in results:
+		try:
+			structure_card = driver.find_element_by_id("structure")
+			structure_display = structure_card.find_element_by_class_name("card__content")
+			table_structure = structure_display.find_element_by_css_selector("protvista-uniprot-structure")
+			table_structure.find_element_by_class_name("protvista-no-results")
+			break
+		except:
+			next
 
-		method = result.find_element_by_css_selector("td:nth-child(4)").text
-		if method in methods:
-			download_link = result.find_element_by_css_selector("td:nth-child(8) > a").get_attribute("href")
-			info[1].append(download_link)
+	META.write(f"\tSTRUCTURES\n")
+	if results:
 
-	Downloads[accession] = info
+		structure_data = []
+		
+		for result in results:
+
+			## Get the structure type
+			method = result.find_element_by_css_selector("td:nth-child(4)").text
+
+			## Set the chain for non-predicted structures, and set the path to the RCSB PDB rather than the PDBe (don't know if it makes a difference other than who gets credit)
+			if method != "Predicted":
+				pdb = result.find_element_by_css_selector("td:nth-child(3)").text
+				chain = result.find_element_by_css_selector("td:nth-child(6)").text
+
+				if "/" in chain:
+					chain = chain.split("/")[0]
+
+				download_link = f"https://files.rcsb.org/download/{pdb}.pdb"
+			else:
+				pdb = accession
+				chain = "-"
+				download_link = result.find_element_by_css_selector("td:nth-child(9) > a").get_attribute("href")
+
+
+			## Get the PDB
+			structure_data.append([pdb,chain,method,download_link])
+			META.write(f"\t\t{pdb}\t{chain}\t{method}\t{download_link}\n")
+		
+		scrap_results[accession][2] = structure_data
+
+	else:
+		META.write(f"\t\tNONE\n")
+
+print()
 
 ## Close the scraper, we are done surfing
 driver.close()
 
 downloaded = []
-sources = ""
-
-SOURCES = open(f"{outdir}/download.log", "w")
-METADATA = open(f"{outdir}/metadata.log","w")
 
 ## Iterate over all UniProt accession found
 
-print(f"Downloading data for {len(Downloads.keys())} accession!")
+for accession in scrap_results.keys():
 
-for accession in Downloads:
+	fasta, features, structures = scrap_results[accession]
 
-	## Split the data into workable chunks
-	org_name,structure_links = Downloads[accession]
-
-	print(f"Getting data for {accession}")
+	print(f"Downloading files for {accession}")
 
 	if download_fasta:
 
-		SOURCES.write(f"{accession}\t{org_name}\n")
-		SOURCES.write("FASTA:\n")
-		METADATA.write(f"{accession}\t{metadata[accession][0]}\t{metadata[accession][1]}\n")
-		METADATA.write(f"\tFASTA\n")
-
-		link = f"https://rest.uniprot.org/uniprotkb/{accession}.fasta"
-
-		print(f"Acquiring FASTA file {link}")
-
-		fasta_name = f"{accession}.fasta"
-		
-		SOURCES.write(f"\t{link}\n")
-		METADATA.write(f"\t\t{fasta_name}\n")
-
-		## Download the FASTA file if not already
-		if not path.exists(f"{fastadir}/{fasta_name}"):
-			system(f"wget {link} -O {fastadir}/{fasta_name} 1>/dev/null 2>>{outdir}/download.errors")
+		print(f"\t{fasta}\n")
+		system(f"wget {fasta} -O {fastadir}/{accession}.fasta 1>/dev/null 2>{outdir}/download.error")
 
 	if download_structures:
-		SOURCES.write("STRUCTURE:\n")
-		METADATA.write(f"\tSTRUCTURE\n")
+		
+		print("Download structures!")
 
-		for link in structure_links:
-			
-			## PDB prefix
-			pdb_prefix = ""
+		def get_pdb(struct_link,pdb_code,method,chain):
 
-			## Determine PDB source\
-			db = ""
-			
-			### AlphaFold
-			if(re.search("AF-(\w+)-\w\d-model",link)):
-				pdb_prefix = re.search("AF-(\w+)-\w\d-model",link).groups(0)[0]
-				db = "AF"
-			
-			### RCSB
-			if(re.search("pdb(\w+)\.ent",link)):
-				pdb_prefix = re.search("pdb(\w+)\.ent",link).groups(0)[0]
-				db = "RCSB"
+			if pdb_code not in downloaded:
+				print(f"\t{struct_link}")
+				system(f"wget {struct_link} -O {pdbdir}/{pdb_code}.pdb 1>/dev/null 2>{outdir}/download.error")
+				downloaded.append(pdb_code)
+			else:
+				print(f"\tSkipping {pdb_code}, already downloaded")
 
-			SOURCES.write(f"\t{link}\n")
+			if method != "Predicted":
+				if not (path.isdir(f"{pdbdir}/{pdb_code}")):
+					system(f"""
+						{pipeline_location}/split_PDB.pl \\
+						  -p {pdbdir}/{pdb_code}.pdb \\
+						  -o {pdbdir}/{pdb_code}
+					""")
+				system(f"""
+					cp {pdbdir}/{pdb_code}/{pdb_code}_{chain}.pdb {pdbdir}
+				""")
+		
+		for set in structures:
 
-			## Download the RCSB PDB file if it hasn't been downloaded/split
-			if not path.exists(f"{pdbdir}/{pdb_prefix}.pdb") and not path.isdir(f"{pdbdir}/{pdb_prefix}"):
-				system(f"wget {link} -O {pdbdir}/{pdb_prefix}.pdb 1>/dev/null 2>>{outdir}/download.errors")
+			pdb, chain, method, download_link = set
 
-			## Split RCSB PDB file by chain and perform BLAST search to identify wanted chains
-			if(db == "RCSB"):
+			if methods:
+				if method in methods:
+					get_pdb(download_link,pdb,method,chain)
+			else:
+				get_pdb(download_link,pdb,method,chain)
+	print()
 
-				## Split the PDB file into different chains if not yet done
-				if not path.exists(f"{pdbdir}/{pdb_prefix}") and path.exists(f"{pdbdir}/{pdb_prefix}.pdb"):
-					system(f"{pipeline_location}/split_PDB.pl -p {pdbdir}/{pdb_prefix}.pdb -o {pdbdir}/{pdb_prefix}")
+## Remove unneeded PDBs to prevent unwanted hits being returned
+for item in listdir(f"{pdbdir}/"):
+	if (path.isdir(f"{pdbdir}/{item}")):
+		system(f"rm -r {pdbdir}/{item}")
 
-				## Extract the FASTA sequences from PDB files
-				if not path.exists(f"{pdbdir}/{pdb_prefix}/FASTA/ALL.fasta") and any(File.endswith(".pdb") for File in os.listdir(f"{pdbdir}/{pdb_prefix}")):
-					
-					## Split the PDBS
-					system(f"{pipeline_location}/extract_pdb_sequence.pl -p {pdbdir}/{pdb_prefix}/*.pdb -o {pdbdir}/{pdb_prefix}/FASTA")
+stop_time = datetime.today()
+OPS.write(f">COMPLETED\n  {stop_time.strftime('%Y-%m-%d %H:%M:%S')}\n\n")
 
-					## Concatenate the FASTA files
-					system(f"cat {pdbdir}/{pdb_prefix}/FASTA/*.fasta > {pdbdir}/{pdb_prefix}/FASTA/ALL.fasta")
+hours, rest = divmod((stop_time-start_time).total_seconds(),60*60)
+mins, secs = divmod(rest,60)
 
-				if path.exists(f"{pdbdir}/{pdb_prefix}/FASTA/ALL.fasta"):
-					## If the sequences have been extracted, perform a BLAST search
-					if path.getsize(f"{pdbdir}/{pdb_prefix}/FASTA/ALL.fasta") > 0:
+OPS.write(f">RUNTIME\n  {int(hours)}:{int(mins)}:{round(secs,2)}\n")
 
-						## Make BLAST db
-						system(f"diamond makedb --in {pdbdir}/{pdb_prefix}/FASTA/ALL.fasta --db {pdbdir}/{pdb_prefix}/FASTA/3Database &>/dev/null")
-
-						## Perform BLAST search
-						system(f"diamond blastp -q {fastadir}/{fasta_name} --db {pdbdir}/{pdb_prefix}/FASTA/3Database --out {pdbdir}/{pdb_prefix}/FASTA/results.diamond.6 &>/dev/null")
-
-						## Parse BLAST file for best results
-						with open(f"{pdbdir}/{pdb_prefix}/FASTA/results.diamond.6","r") as BLAST:
-
-							for line in BLAST:
-								
-								file = line.split("\t")[1]
-								
-								## Move the best PDB chain from its parent into home
-								system(f"cp {pdbdir}/{pdb_prefix}/{file}.pdb {pdbdir}/{file}.pdb")
-
-								## Add metadata to log
-								if f"{file}.pdb" not in metadata[accession][3]:
-									metadata[accession][3].append(f"{file}.pdb")
-									METADATA.write(f"\t\t{file}.pdb\n")
-								break
-			
-			elif f"{file}.pdb" not in metadata[accession][3]:
-				metadata[accession][3].append(f"{file}.pdb")
-				METADATA.write(f"\t\t{file}.pdb\n")
-
-if download_structures:
-	## Remove unneeded PDBs to prevent unwanted hits being returned
-	for item in os.listdir(f"{pdbdir}/"):
-		if (os.path.isdir(f"{pdbdir}/{item}")):
-			system(f"rm -r {pdbdir}/{item}")
-
-stop = time.strftime("%Y-%m-%d, %H:%M:%S",time.localtime())
-
-LOG.write(f"Start\t{start}\nStop\t{stop}\n")
-
-LOG.close()
-METADATA.close()
-SOURCES.close()
-
-## Create an archive for later use
-system(f"tar -czf {outdir}.tar.gz {outdir}")
+OPS.close()
+META.close()
