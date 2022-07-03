@@ -1,8 +1,8 @@
 #!/usr/bin/python
 
 name = "uniprot_scraper.py"
-version = "1.5.0"
-updated = "2022-07-01"
+version = "1.5.1"
+updated = "2022-07-02"
 
 usage = f"""\n
 NAME		{name}
@@ -138,14 +138,34 @@ OPS.write(f">KEYWORDS\n")
 
 if(custom):
 	url = url + custom
-	OPS.write(f"  {custom}\n\n")
+	OPS.write(f"  {custom}\n")
 else:
 	url = url + keywords[0]
 	OPS.write(f"  {keywords[0]}\n")
 	for ops in keywords[1:]:
 		url = url + "AND" + ops
 		OPS.write(f"  {ops}\n")
-	OPS.write(f"\n")
+OPS.write(f"\n")
+
+OPS.write(f">DOWNLOAD_FASTA\n")
+if(download_fasta):
+	OPS.write(f"  TRUE\n")
+else:
+	OPS.write(f"  FALSE\n")
+OPS.write(f"\n")
+
+OPS.write(f">DOWNLOAD_STRUCTURE\n")
+if(download_structures):
+	OPS.write(f"  TRUE\n\n")
+	OPS.write(f"  >METHODS\n")
+	if(methods):
+		for method in methods:
+			OPS.write(f"    {method}\n")
+	else:
+		OPS.write(f"    ALL\n")
+else:
+	OPS.write(f"  FALSE\n")
+OPS.write(f"\n")
 
 OPS.write(f">SEARCH_URL\n  {url}\n\n")
 OPS.write(f">LAUNCHED\n  {start_time.strftime('%Y-%m-%d %H:%M:%S')}\n\n")
