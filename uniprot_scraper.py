@@ -1,8 +1,8 @@
 #!/usr/bin/python
 
 name = "uniprot_scraper.py"
-version = "1.5.1"
-updated = "2022-07-02"
+version = "1.5.2"
+updated = "2022-07-03"
 
 usage = f"""\n
 NAME		{name}
@@ -454,7 +454,11 @@ for accession in scrap_results.keys():
 						  -o {pdbdir}/{pdb_code}
 					""")
 				system(f"""
-					cp {pdbdir}/{pdb_code}/{pdb_code}_{chain}.pdb {pdbdir}
+					if [ -f {pdbdir}/{pdb_code}/{pdb_code}_{chain}.pdb ]
+					then
+						mv {pdbdir}/{pdb_code}/{pdb_code}_{chain}.pdb {pdbdir}
+						gzip {pdbdir}/{pdb_code}_{chain}.pdb
+					fi
 				""")
 		
 		for set in structures:
@@ -468,10 +472,11 @@ for accession in scrap_results.keys():
 				get_pdb(download_link,pdb,method,chain)
 	print()
 
-## Remove unneeded PDBs to prevent unwanted hits being returned
-for item in listdir(f"{pdbdir}/"):
-	if (path.isdir(f"{pdbdir}/{item}")):
-		system(f"rm -r {pdbdir}/{item}")
+if download_structures:
+	## Remove unneeded PDBs to prevent unwanted hits being returned
+	for item in listdir(f"{pdbdir}/"):
+		if (path.isdir(f"{pdbdir}/{item}")):
+			system(f"rm -r {pdbdir}/{item}")
 
 stop_time = datetime.today()
 OPS.write(f">COMPLETED\n  {stop_time.strftime('%Y-%m-%d %H:%M:%S')}\n\n")
