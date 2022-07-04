@@ -1,8 +1,8 @@
 #!/usr/bin/perl
 ## Pombert Lab 2022
 my $name = "run_QueGO.pl";
-my $version = "0.6.2";
-my $updated = "2022-05-24";
+my $version = "0.6.4";
+my $updated = "2022-07-03";
 
 use strict;
 use warnings;
@@ -20,7 +20,7 @@ SYNOPSIS	The purpose of this script is to download 3D structures related to give
 		an archive of predicted structures.
 
 USAGE		$name \\
-		  -g "telomere" \\
+		  -k "telomere" \\
 		  -v \\
 		  -m "X-ray" \\
 		  -p E_cuniculi_3D_structs \\
@@ -28,11 +28,12 @@ USAGE		$name \\
 		  -o QueGO_telomere_Results
 
 OPTIONS
--g (--go_annotation)	Search using gene ontolgy keyword
+-k (--go_keyword)	Search using gene ontolgy keyword
 -v (--verified_only)	Search for genes that have been verified by experimental evidence
 -m (--method)		Method used to obtain structure [Default = All] (i.e., X-ray, NMR)
 -p (--predictions)	Directories containing predicted protein structures
--a (--archives)		GESAMT created archives
+-g (--archives)		GESAMT created archives
+-f (--fasta)		FASTA(s) for genome being investigated (can be extracted if predicted structures are provided)
 -u (--uniprot)		Previously used UNIPROT_SCRAP_RESULTS
 -t (--threads)		Number of threads to use [Default = 4]
 -o (--outdir)		Output directory [Default = QueGO_Results]
@@ -48,9 +49,9 @@ my $parser_script = "$pipeline_dir/parse_GESAMT_results.pl";
 my $metadata_script = "$pipeline_dir/add_metadata_to_results.pl";
 my $custom;
 
-my $go_annotation;
+my $go_keyword;
 my $verified_only;
-my $method;
+my @method;
 my @predictions;
 my @archives;
 my $threads = 4;
@@ -58,9 +59,9 @@ my $uniprot;
 my $outdir = "QueGO_Results";
 
 GetOptions(
-	'g|go_keyword=s' => \$go_annotation,
+	'g|go_keyword=s' => \$go_keyword,
 	'v|verfied_only' => \$verified_only,
-	'm|method=s' => \$method,
+	'm|method=s{1,}' => \@method,
 	'p|predictions=s{1,}' => \@predictions,
 	'a|archive=s{1,}' => \@archives,
 	't|threads=s' => \$threads,
@@ -100,7 +101,7 @@ if ($uniprot){
 	}
 }
 ### Perform UniProt scraping
-elsif($go_annotation){
+elsif($go_keyword){
 	### Check if scrap has been done previously
 	unless (-f "$uniprot_dir/metadata.log"){
 		
@@ -109,13 +110,13 @@ elsif($go_annotation){
 
 		my $flags = "";
 		
-		if($go_annotation){
-			$flags .= "--go_keyword $go_annotation ";
+		if($go_keyword){
+			$flags .= "--go_keyword $go_keyword ";
 		}
 
 
-		if($method){
-			$flags .= "--method $method ";
+		if(@method){
+			$flags .= "--method @method ";
 		}
 
 		if($verified_only){
@@ -214,13 +215,14 @@ if(@predictions||@archives){
 				unless(-d "$pdb_dir/$file"){
 					my $pdb_name = fileparse($file,".pdb");
 					unless(-f "$results_dir/$predictor/$pdb_name.normal.gesamt.gz"){
-						system "$gesamt_script \\
-								-cpu $threads \\
-								-query \\
-								-arch $archive \\
-								-input $pdb_dir/$file \\
-								-o $results_dir/$predictor \\
-								-mode normal
+						system "
+							$gesamt_script \\
+							  -cpu $threads \\
+							  -query \\
+							  -arch $archive \\
+							  -input $pdb_dir/$file \\
+							  -o $results_dir/$predictor \\
+							  -mode normal
 						";
 					}
 				}
@@ -250,23 +252,25 @@ if(@predictions||@archives){
 	print LOG "\nFinished parsing results on $stop\n";
 	print "Finished parsing GESAMT results!\n";
 
-	###################################################################################################
-	## Add metadata to GESAMT results
-	###################################################################################################
-
-	$start = localtime();
-	print LOG "\nStarted adding metadata to results on $start\n";
-	print "Adding metadata to GESAMT results!\n";
-
-	system "$metadata_script \\
-			--metadata $uniprot_dir/metadata.log \\
-			--parsed $results_dir/All_Parsed_Results.matches \\
-			--outfile $results_dir/Parsed_Results_w_metadata.tsv
-	";
-
-	$stop = localtime();
-	print LOG "\nFinished adding metadata to results on $stop\n";
 }
+
+# ###################################################################################################
+# ## Add metadata to GESAMT results
+# ###################################################################################################
+
+# $start = localtime();
+# print LOG "\nStarted adding metadata to results on $start\n";
+# print "Adding metadata to GESAMT results!\n";
+
+# system "$metadata_script \\
+# 		  --metadata $uniprot_dir/metadata.log \\
+# 		  --struct $results_dir/All_Parsed_Results.matches \\
+# 		  --seqnc $
+# 		  --outfile $results_dir/Parsed_Results_w_metadata.tsv
+# ";
+
+# $stop = localtime();
+# print LOG "\nFinished adding metadata to results on $stop\n";
 
 $stop = localtime();
 print LOG "\n$name completed on $stop\n";
