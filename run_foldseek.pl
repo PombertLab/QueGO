@@ -1,8 +1,8 @@
 #!/usr/bin/perl
 ## Pombert Lab 2022
-my $version = '0.1';
+my $version = '0.2.1';
 my $name = 'run_foldseek.pl';
-my $updated = '2022-04-26';
+my $updated = '2022-07-05';
 
 use strict;
 use warnings;
@@ -24,7 +24,7 @@ SYNOPSIS	Run foldseek searches against PDB structures
 REQUIREMENTS	Foldseek - https://github.com/steineggerlab/foldseek
 
 CREATE DB	${name} -create -db /media/Data_2/FSEEK/rcsb -pdb /media/Data_2/PDB/
-QUERY DB	${name} -query -db /media/Data_2/FSEEK/rcsb -input *.pdb -o ./ -z
+QUERY DB	${name} -query -db /media/Data_2/FSEEK/rcsb -input *.pdb -o ./FSEEK_RESULTS -z
 
 OPTIONS:
 -d (--db)	Foldseek database to create or query
@@ -72,7 +72,7 @@ my $gnuzip;
 GetOptions(
 	'd|db=s' => \$db,
 	'l|log=s' => \$log,
-	't|thread=i' => \$threads,
+	't|threads=i' => \$threads,
 	'v|verbosity=i' => \$verbosity,
 	'c|create' => \$create,
 	'p|pdb=s' => \$pdb,
@@ -111,22 +111,23 @@ if ($create){
 		die "\nERROR: Please enter folder containing the PDB files for the database.";
 	}
 
-	unless (-d $db){ 
-		make_path( $db, { mode => 0755 } ) or die "Can't create folder $db: $!\n";
+	my ($dbname,$dbpath) = fileparse($db);
+	unless (-d $dbpath){ 
+		make_path( $dbpath, { mode => 0755 } ) or die "Can't create folder $dbpath: $!\n";
 	}
 
-	system "foldseek \\
+	system ("foldseek \\
 			  createdb \\
 			  --threads $threads \\
 			  $pdb \\
-			  $db";
+			  $db") == 0 or checksig();
 }
 
 ## Running foldseek queries/Skipping previously done searches
 if ($query){
 
 	unless (-d $outdir){ 
-		mkdir ($outdir, 0755) or die "Can't create folder $outdir: $!\n";
+		make_path($outdir, {mode=>0755}) or die "Can't create folder $outdir: $!\n";
 	}
 
 	my @fsk;
@@ -140,16 +141,17 @@ if ($query){
 		$results{$result} = 'done';
 	}
 
+
 	while (my $file = shift(@input)){
 
 		my ($pdb, $dir) = fileparse($file);
-		$pdb =~ s/.pdb$//;
+		($pdb) = $pdb =~ /(\w+)\.pdb(?:\.gz)$/;
 
 		unless (exists $results{$pdb}){
 
-			print "\nRunning foldseek on $file...\n";
+			print "\n  Running foldseek on $file...\n";
 
-			system "foldseek \\
+			system ("foldseek \\
 			  easy-search \\
 			  --max-seqs $mseqs \\
 			  --alignment-type $atype \\
@@ -158,23 +160,26 @@ if ($query){
 			  $file \\
 			  $db \\
 			  $outdir/$pdb.fseek \\
-			  $outdir/tmp";
+			  $outdir/tmp 1>/dev/null 2>$outdir/error.log") == 0 or checksig();
 			
 			if ($gnuzip){
 				## Compressing data with GZIP to save some space
-				print "\nCompressing $outdir/$pdb.fseek with GZIP ...\n";
 				system "gzip $outdir/$pdb.fseek";
 			}
 		}
 
 		## Searches can take a while, best to skip if done previously
 		else { 
-			print "Skipping PDB file: $pdb => Foldseek result found in output directory $outdir\n";
+			print "  Skipping PDB file: $pdb => Foldseek result found in output directory $outdir\n";
 		}
 	}
 
+	if ($gnuzip){
+		print "\n  Results have been compressed with GZIP ...\n";
+	}
+
 	## Delete tmp directory
-	system "rm -R $outdir/tmp";
+	if (-d "$outdir/tmp"){ system "rm -R $outdir/tmp"; }
 }
 
 my $end = localtime();
@@ -183,3 +188,22 @@ $endtime = sprintf ("%.2f", $endtime);
 print LOG "Completed on: $end\n";
 print LOG "Total run time: $endtime minutes\n";
 close LOG;
+
+### Subroutine(s)
+sub checksig {
+
+	my $exit_code = $?;
+	my $modulo = $exit_code % 255;
+
+	print "\nExit code = $exit_code; modulo = $modulo \n";
+
+	if ($modulo == 2) {
+		print "\nSIGINT detected: Ctrl+C => exiting...\n";
+		exit(2);
+	}
+	elsif ($modulo == 131) {
+		print "\nSIGTERM detected: Ctrl+\\ => exiting...\n";
+		exit(131);
+	}
+
+}
