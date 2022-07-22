@@ -1,8 +1,8 @@
 #!/usr/bin/perl
 ## Pombert Lab 2022
-my $version = '0.2.1';
+my $version = '0.2.2';
 my $name = 'run_foldseek.pl';
-my $updated = '2022-07-05';
+my $updated = '2022-07-22';
 
 use strict;
 use warnings;
@@ -130,24 +130,12 @@ if ($query){
 		make_path($outdir, {mode=>0755}) or die "Can't create folder $outdir: $!\n";
 	}
 
-	my @fsk;
-	my %results;
-	find (sub {push @fsk, $File::Find::name unless -d}, $outdir);
-
-	while (my $fsk = shift(@fsk)){
-		my ($result, $folder) = fileparse($fsk);
-		if ($gnuzip){ $result =~ s/\.fseek.gz$//; }
-		else { $result =~ s/\.fseek$//; }
-		$results{$result} = 'done';
-	}
-
-
 	while (my $file = shift(@input)){
 
 		my ($pdb, $dir) = fileparse($file);
-		($pdb) = $pdb =~ /(\w+)\.pdb(?:\.gz)$/;
+		($pdb) = $pdb =~ /(\w+)\.pdb(?:\.gz)?$/;
 
-		unless (exists $results{$pdb}){
+		unless (-f "$outdir/$pdb.fseek" || -f "$outdir/$pdb.fseek.gz"){
 
 			print "\n  Running foldseek on $file...\n";
 
