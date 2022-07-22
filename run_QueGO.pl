@@ -1,8 +1,8 @@
 #!/usr/bin/perl
 ## Pombert Lab 2022
 my $name = "run_QueGO.pl";
-my $version = "0.6.4";
-my $updated = "2022-07-03";
+my $version = "0.6.6";
+my $updated = "2022-07-22";
 
 use strict;
 use warnings;
@@ -15,68 +15,98 @@ my $usage = <<"EXIT";
 NAME		$name
 VERSION		$version
 UPDATED		$updated
-SYNOPSIS	The purpose of this script is to download 3D structures related to given keywords
-		from https://www.uniprot.org/ and runs homology searches of the known structures against
-		an archive of predicted structures.
+SYNOPSIS	This script runs the QueGO pipeline from start to finish.
 
 USAGE		$name \\
 		  -k "telomere" \\
 		  -v \\
-		  -m "X-ray" \\
-		  -p E_cuniculi_3D_structs \\
+		  -m "X-ray" "Predicted"\\
+		  -s E_cuniculi_3D_structs \\
 		  -t 4 \\
 		  -o QueGO_telomere_Results
 
 OPTIONS
+
+## UNIPROT SCRAPER OPTIONS ##
 -k (--go_keyword)	Search using gene ontolgy keyword
 -v (--verified_only)	Search for genes that have been verified by experimental evidence
--m (--method)		Method used to obtain structure [Default = All] (i.e., X-ray, NMR)
--p (--predictions)	Directories containing predicted protein structures
--g (--archives)		GESAMT created archives
--f (--fasta)		FASTA(s) for genome being investigated (can be extracted if predicted structures are provided)
--u (--uniprot)		Previously used UNIPROT_SCRAP_RESULTS
+-m (--method)		Method used to obtain structure [Default = All] (X-ray, NMR, Predicted)
+-u (--uniprot)		Previously performed UNIPROT_SCRAP_RESULTS
+
+## HOMOLOGY OPTIONS ##
+-s (--struct_sets)	Directories containing predicted protein structures
+-h (--hom_tool)		3D Homology tool to use (FoldSeek or GESAMT) [Default: FoldSeek]
+-a (--homology_arch)	3D homology archives (Archive must be compatible with --hom_tool)
+
+## GENERAL OPTIONS ##
 -t (--threads)		Number of threads to use [Default = 4]
 -o (--outdir)		Output directory [Default = QueGO_Results]
 EXIT
 
 die("\n$usage\n") unless(@ARGV);
 
-my ($script,$pipeline_dir) = fileparse($0);
-my $scraper_script = "$pipeline_dir/uniprot_scraper.py";
-my $headers_script = "$pipeline_dir/PDB_headers.pl";
-my $gesamt_script = "$pipeline_dir/run_GESAMT.pl";
-my $parser_script = "$pipeline_dir/parse_GESAMT_results.pl";
-my $metadata_script = "$pipeline_dir/add_metadata_to_results.pl";
-my $custom;
-
 my $go_keyword;
 my $verified_only;
 my @method;
 my @predictions;
+my $hom_tool = "FOLDSEEK";
 my @archives;
+my $prot_fasta;
 my $threads = 4;
 my $uniprot;
 my $outdir = "QueGO_Results";
+my $custom;
 
 GetOptions(
-	'g|go_keyword=s' => \$go_keyword,
+	'k|go_keyword=s' => \$go_keyword,
 	'v|verfied_only' => \$verified_only,
 	'm|method=s{1,}' => \@method,
-	'p|predictions=s{1,}' => \@predictions,
+	's|pred_struct=s{1,}' => \@predictions,
+	'h|hom_tool=s' => \$hom_tool,
 	'a|archive=s{1,}' => \@archives,
+	'p|prot_fasta=s{1,}' => \$prot_fasta,
 	't|threads=s' => \$threads,
 	'u|uniprot=s' => \$uniprot,
 	'o|outdir=s' => \$outdir,
 	'c|custom=s' => \$custom, ## shhh, this is a secret tool for debugging purposes
 );
 
-my $gesamt_dir = "$outdir/GESAMT";
-my $archives_dir = "$gesamt_dir/ARCHIVES";
-my $results_dir = "$gesamt_dir/RESULTS";
-my $uniprot_dir = "$outdir/UNIPROT_SCRAP_RESULTS";
-my $pdb_dir = "$uniprot_dir/PDBs";
-my $fasta_dir = "$uniprot_dir/FASTA";
-my @dirs = ($outdir,$gesamt_dir,$archives_dir,$results_dir,$pdb_dir,$fasta_dir);
+## Setup script variables
+my ($script,$pipeline_dir) = fileparse($0);
+my $scraper_script = $pipeline_dir."/uniprot_scraper.py";
+my $foldseek_script = $pipeline_dir."/run_foldseek.pl";
+my $gesamt_script = $pipeline_dir."/run_GESAMT.pl";
+my $parser_script = $pipeline_dir."/parse_3D_homology_results.pl";
+my $metadata_script = $pipeline_dir."/organize_results.pl";
+
+## Setup directory variables
+my $uniprot_dir = $outdir."/UNIPROT_SCRAP_RESULTS";
+my $fasta_dir = $uniprot_dir."/FASTA";
+my $pdb_dir = $uniprot_dir."/PDBs";
+
+my $seq_hom_dir = $outdir."/SEQUENCE_HOMOLOGY";
+
+my $struct_hom_dir = $outdir."/STRUCTURE_HOMOLOGY";
+my $arch_dir = $struct_hom_dir."/ARCHIVES";
+my $struct_res_dir = $struct_hom_dir."/RESULTS";
+
+my $results_dir = $outdir."/RESULTS";
+
+my @dirs = (
+	$outdir,
+
+	$uniprot_dir,
+	$fasta_dir,
+	$pdb_dir,
+
+	$seq_hom_dir,
+
+	$struct_hom_dir,
+	$arch_dir,
+	$struct_res_dir,
+
+	$results_dir
+);
 
 foreach my $dir (@dirs){
 	unless(-d $dir){
@@ -84,30 +114,21 @@ foreach my $dir (@dirs){
 	}
 }
 
-my $start = localtime();
-my $stop;
-open LOG, ">", "$outdir/run_QueGO.log" or die("Unable to open $outdir/run_QueGO.log: $!\n");
-print LOG "$0 started on $start\n";
-
 ###################################################################################################
-## Gathering UniProt keyword results
+## Getting UniProt data either from new WebScrap or old archive
 ###################################################################################################
 
-### Use previously used scrap results
-if ($uniprot){
-	print "Running QueGO on an existing UniProt Scrap!\n";
-	if (-d "$uniprot"){
-		system "cp -r $uniprot/* $uniprot_dir/";
+unless (-f "$uniprot_dir/metadata.log"){
+	### Use previously used scrap results
+	if ($uniprot){
+		if (-d "$uniprot"){
+			system "cp -r $uniprot/* $uniprot_dir/";
+		}
 	}
-}
-### Perform UniProt scraping
-elsif($go_keyword){
-	### Check if scrap has been done previously
-	unless (-f "$uniprot_dir/metadata.log"){
+	### Perform UniProt scraping
+	elsif($go_keyword){
+		### Check if scrap has been done previously
 		
-		$start = localtime();
-		print LOG "\nUniProt scraping started on $start\n";
-
 		my $flags = "";
 		
 		if($go_keyword){
@@ -136,141 +157,166 @@ elsif($go_keyword){
 		";
 
 		unless(-f "$uniprot_dir/metadata.log"){
-			print LOG "\nUniProt scraping failed on $stop";
-			exit;
+			die "\n[E]  UniProt scraping failed\n";
 		}
-
-		$stop = localtime();
-		print LOG "\nUniProt scraping completed on $stop\n";
 
 	}
 	else{
-		print "UniProt download completed previous! Moving to Homology Search!\n";
+		die "\n[E]  Please provide a GO keyword or UNIPROT_SCRAP_RESULTS directory!\n";
 	}
-
 }
 else{
-	print "\n[E]  Please provide a GO keyword or UNIPROT_SCRAP_RESULTS directory!\n";
-	exit();
+	print "Previous UniProt scrap found at $uniprot_dir. Running on existing scrap results!\n";
 }
 
+my %archives;
 
-if(@predictions||@archives){
+###################################################################################################
+## Copying precompiled 3D homology archives
+###################################################################################################
 
-	###################################################################################################
-	## Preparing 3D homology GESAMT archives
-	###################################################################################################
+if(@archives){
 	
-	$start = localtime();
-	print LOG "\nArchive creation started on $start\n";
-
-	my %archives;
-
 	### Copy pre-existing archives to new work enviroment
 	foreach my $archive (@archives){
-		my ($archive_path) = abs_path($archive);
-		my ($archive_name) = $archive_path =~ /\/(\w+)\/*$/;
-		unless(-d "$archives_dir/$archive_name"){
-			system "cp -r $archive_path $archives_dir/$archive_name";
-			print "Copying pre-compiled GESAMT archive $archive_name!\n";
-		}
-		$archives{$archive_name} = "$archives_dir/$archive_name";
-	}
 
-	### Make GESAMT archive from predicted files
-	foreach my $predictor_dir (@predictions){
-		my ($predictor) = $predictor_dir =~ /\/(\w+)\/*$/;
-		unless(-d "$archives_dir/$predictor"){
-			system "$gesamt_script \\
-					-cpu $threads \\
-					-make \\
-					-arch $archives_dir/$predictor \\
-					-pdb $predictor_dir
-			";
-		}
-		else{
-			print "Archive already created!\n";
-		}
-		$archives{$predictor} = "$archives_dir/$predictor";
-	}
+		opendir(ARCH,$archive);
 
+		my $arch_tool = "FOLDSEEK";
 
-	$stop = localtime();
-	print LOG "\nArchive creation completed on $stop\n";
-
-	###################################################################################################
-	## Perform 3D homology searches
-	###################################################################################################
-
-	$start = localtime();
-	print LOG "\nGESAMT searches started on $start\n";
-
-	my @results;
-
-	foreach my $predictor (sort(keys(%archives))){
-		my $archive = $archives{$predictor};
-		unless(-d "$results_dir/$predictor"){
-			opendir(QUERY,$pdb_dir);
-			foreach my $file (readdir(QUERY)){
-				unless(-d "$pdb_dir/$file"){
-					my $pdb_name = fileparse($file,".pdb");
-					unless(-f "$results_dir/$predictor/$pdb_name.normal.gesamt.gz"){
-						system "
-							$gesamt_script \\
-							  -cpu $threads \\
-							  -query \\
-							  -arch $archive \\
-							  -input $pdb_dir/$file \\
-							  -o $results_dir/$predictor \\
-							  -mode normal
-						";
-					}
+		while (my $item = readdir(ARCH)){
+			unless (-d $archive."/"."$item"){
+				if ($item =~ /^gesamt.archive/){
+					$arch_tool = "GESAMT";
+					last;
 				}
 			}
 		}
-		push(@results,"$results_dir/$predictor");
+
+		close ARCH;
+
+		if ($arch_tool eq $hom_tool){
+			my ($archive_path) = abs_path($archive);
+			my ($archive_name) = $archive_path =~ /\/(\w+)\/*$/;
+			unless(-d $arch_dir."/".$hom_tool."/".$archive_name){
+				system "cp -r $archive_path $arch_dir/$hom_tool/$archive_name";
+			}
+			$archives{$archive_name} = $archive_path;
+		}
+		else{
+			continue;
+		}
+
 	}
-
-	$stop = localtime();
-	print LOG "\nGESAMT searches completed on $stop\n";
-	print "GESAMT searches completed!\n";
-
-	###################################################################################################
-	## Parse GESAMT results
-	###################################################################################################
-
-	$stop = localtime();
-	print LOG "\nStarted parsing results on $stop\n";
-	print "Parsing GESAMT results!\n";
-
-	system "$parser_script \\
-			--results @results \\
-			--outdir $results_dir
-	";
-
-	$stop = localtime();
-	print LOG "\nFinished parsing results on $stop\n";
-	print "Finished parsing GESAMT results!\n";
-
 }
 
-# ###################################################################################################
-# ## Add metadata to GESAMT results
-# ###################################################################################################
+###################################################################################################
+## Creating 3D homology archives
+###################################################################################################
 
-# $start = localtime();
-# print LOG "\nStarted adding metadata to results on $start\n";
-# print "Adding metadata to GESAMT results!\n";
+ARCHIVE_CREATION:
+if (@predictions){
+	### Make FOLDSEEK archive from structure sets
+	if (uc($hom_tool) eq "FOLDSEEK"){
+		for my $structure_set (@predictions){
+			my ($db_name) = $structure_set =~ /\/(\w+)\/*$/;
+			unless (-d $arch_dir."/FOLDSEEK/".$db_name){	
+				system ("
+					$foldseek_script \\
+					  --create \\
+					  --db $arch_dir/FOLDSEEK/$db_name/$db_name \\
+					  --pdb $structure_set \\
+					  --threads $threads
+				");
+				$archives{$db_name} = $arch_dir."/FOLDSEEK/".$db_name;
+			}
+			else{
+				continue;
+			}
+		}
+	}
+	### Make GESAMT archive from structure sets
+	elsif (uc($hom_tool) eq "GESAMT"){
+		foreach my $structure_set (@predictions){
+			my ($db_name) = $structure_set =~ /\/(\w+)\/*$/;
+			unless (-d $arch_dir."/GESAMT/".$db_name){
+				system ("
+					$gesamt_script \\
+					  -cpu $threads \\
+					  -make \\
+					  -arch $arch_dir/GESAMT/$db_name \\
+					  -pdb $structure_set
+				");
+				$archives{$db_name} =  $arch_dir."/GESAMT/".$db_name;
+			}
+			else{
+				continue;
+			}
+		}
+	}
+	else{
+		ASK:
+		print "\n\n[W] $hom_tool is not a valid homology tool!\n\n Please select either GESAMT or FoldSeek:\t";
+		chomp(my $selection = <STDIN>);
+		if (uc($selection) eq "GESAMT" || uc($selection) eq "FOLDSEEK"){
+			$hom_tool = $selection;
+			goto ARCHIVE_CREATION;
+		}
+		else{
+			goto ASK;
+		}
+	}
+}
 
-# system "$metadata_script \\
-# 		  --metadata $uniprot_dir/metadata.log \\
-# 		  --struct $results_dir/All_Parsed_Results.matches \\
-# 		  --seqnc $
-# 		  --outfile $results_dir/Parsed_Results_w_metadata.tsv
-# ";
+###################################################################################################
+## Perform 3D homology searches
+###################################################################################################
 
-# $stop = localtime();
-# print LOG "\nFinished adding metadata to results on $stop\n";
+my @results;
 
-$stop = localtime();
-print LOG "\n$name completed on $stop\n";
+for my $arch (keys(%archives)){
+	my $arch_path = $archives{$arch};
+	if (uc($hom_tool) eq "FOLDSEEK"){
+		system ("
+			$foldseek_script \\
+			  --query \\
+			  --db $arch_path/$arch \\
+			  --input $pdb_dir/*\.pdb\.* \\
+			  --outdir $struct_res_dir/FOLDSEEK/$arch \\
+			  --gzip
+		");
+	}
+	elsif (uc($hom_tool) eq "GESAMT"){
+		system ("
+			$gesamt_script \\
+				--cpu $threads \\
+				--query \\
+				--arch $arch \\
+				--input $pdb_dir/*\.pdb\.* \\
+				--outdir $struct_res_dir/GESAMT/$arch \\
+				--gzip \\
+				-mode normal
+		");
+	}
+}
+
+###################################################################################################
+## Parse 3D Homology Results
+###################################################################################################
+
+system "$parser_script \\
+		--gesamt $struct_res_dir/GESAMT/* \\
+		--foldseek $struct_res_dir/FOLDSEEK/* \\
+		--outdir $results_dir
+";
+
+###################################################################################################
+## Add metadata to GESAMT results
+###################################################################################################
+
+system "$metadata_script \\
+		  --metadata $uniprot_dir/metadata.log \\
+		  --foldseek $results_dir/FoldSeek_parsed_results.matches \\
+		  --gesamt $results_dir/GESAMT_parsed_results.matches \\
+		  --outfile $results_dir/compiled_results_w_metadata.tsv
+";
