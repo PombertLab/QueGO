@@ -2,7 +2,7 @@
 ## Pombert Lab 2022
 
 my $name = 'organize_results.pl';
-my $version = '1.6.2';
+my $version = '1.6.3';
 my $updated = '2022-07-22';
 
 use strict;
@@ -358,7 +358,7 @@ my %loci_record;
 # print OUT "### LOCUS\tANNOTATION\tSEQ_HOM_EVAL\tACCESSION\t(SEQ_HOM_HIT/SEQ_HOM_MATCHES)\t";
 # print OUT "STC_HOM_QSCORE\tSTC_PDB\tPDB_SOURCE\t(STC_HOM_HIT/STC_HOM_MATCHES)\n\n";
 
-print OUT "### LOCUS\tANNOTATION\tSEQ_HOM_EVAL\tFOLDSEEK_EVAL\tFOLDSEEK_PDB\tFOLDSEEK_DB\tGESAMT_QSCORE\tGESAMT_PDB\tGESAMT_DB\n\n";
+print OUT "### LOCUS\tANNOTATION\tSEQ_HOM_EVALUE\tSEQ_FASTA\tFOLDSEEK_EVALUE\tFOLDSEEK_PDB\tFOLDSEEK_DB\tGESAMT_QSCORE\tGESAMT_PDB\tGESAMT_DB\n\n";
 
 foreach my $prot (sort(keys(%proteins))){
 
