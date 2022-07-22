@@ -2,7 +2,7 @@
 ## Pombert Lab 2022
 
 my $name = 'organize_results.pl';
-my $version = '1.6.1';
+my $version = '1.6.2';
 my $updated = '2022-07-22';
 
 use strict;
@@ -126,11 +126,11 @@ while (my $line = <META>){
 						my $chain = $2;
 						if ($chain =~ /[a-zA-Z]/){
 							push(@{$metadata{$accession}[4]},$pdb."_".$chain);
-							@{$struct_link{$pdb."_".$chain}} = ($metadata{$accession}[0],$accession);
+							@{$struct_link{uc($pdb)."_".uc($chain)}} = ($metadata{$accession}[0],$accession);
 						}
 						else{
 							push(@{$metadata{$accession}[4]},$pdb);
-							@{$struct_link{$pdb}} = ($metadata{$accession}[0],$accession);
+							@{$struct_link{uc($pdb)}} = ($metadata{$accession}[0],$accession);
 						}
 					}
 					else{
@@ -202,11 +202,11 @@ if ($seqnc_file){
 				$loci_count{"seq"}{$locus}++;
 
 				## Store SeqHom data under the protein_name and locus_tag
-				@{$all_results{$prot_name}{$locus}[0]} = @data;
+				@{$all_results{$prot_name}{$locus}{"SEQ"}} = @data;
 				@{$seq_results{$prot_name}{$locus}} = @data;
 
 				## Add the eval to score keeper
-				$all_results{$prot_name}{$locus}[2] = -$data[9];
+				$all_results{$prot_name}{$locus}{"SCORE"} = -$data[9];
 			}
 		}
 	}
@@ -221,7 +221,6 @@ if ($seqnc_file){
 my %struct_results;
 
 foreach my $hom_tool (sort(keys(%struct_files))){
-	print($hom_tool."\n");
 	my $struct_file = $struct_files{$hom_tool};
 	if (-f $struct_file){
 		open IN, "<", $struct_file or die "Unable to access $struct_file: $!\n";
@@ -233,48 +232,51 @@ foreach my $hom_tool (sort(keys(%struct_files))){
 			chomp($line);
 			unless($line eq "" || $line =~ /^###/){
 				if ($line =~ /^## (\w+)/){
-					$struct = $1;
+					$struct = uc($1);
 				}
 				else{
 
-					my ($prot_name, $accession) = @{$struct_link{$struct}};
-					
-					## Convert line to array
-					my @data = split("\t",$line);
-					
-					my $locus = shift(@data);
-					unshift(@data,$struct);
-					unshift(@data,$accession);
+					if($struct_link{$struct}){
 
-					## Use only the best hit per locus
-					if ($hom_tool eq "FOLDSEEK"){
-						if ($all_results{$prot_name}{$locus}){
-							unless ($all_results{$prot_name}{$locus}[1]){
-								@{$all_results{$prot_name}{$locus}[1]} = @data;
-								@{$struct_results{$hom_tool}{$prot_name}{$locus}} = @data;
-								$all_results{$prot_name}{$locus}[3] -= $data[11];
+						my ($prot_name, $accession) = @{$struct_link{$struct}};
+						
+						## Convert line to array
+						my @data = split("\t",$line);
+						
+						my $locus = shift(@data);
+						unshift(@data,$struct);
+						unshift(@data,$accession);
+
+						## Use only the best hit per locus
+						if ($hom_tool eq "FOLDSEEK"){
+							if ($all_results{$prot_name}{$locus}){
+								unless ($all_results{$prot_name}{$locus}{"FOLDSEEK"}){
+									@{$all_results{$prot_name}{$locus}{"FOLDSEEK"}} = @data;
+									@{$struct_results{$hom_tool}{$prot_name}{$locus}} = @data;
+									$all_results{$prot_name}{$locus}{"SCORE"} -= $data[11];
+									$loci_count{"stc"}{$locus} ++;
+								}
+							}
+							else{
+								@{$all_results{$prot_name}{$locus}{"FOLDSEEK"}} = @data;
+								$all_results{$prot_name}{$locus}{"SCORE"} = $data[11];
 								$loci_count{"stc"}{$locus} ++;
 							}
 						}
-						else{
-							@{$all_results{$prot_name}{$locus}[1]} = @data;
-							$all_results{$prot_name}{$locus}[3] = $data[11];
-							$loci_count{"stc"}{$locus} ++;
-						}
-					}
-					elsif ($hom_tool eq "GESAMT"){
-						if ($all_results{$prot_name}{$locus}){
-							unless ($all_results{$prot_name}{$locus}[2]){
-								@{$all_results{$prot_name}{$locus}[2]} = @data;
-								@{$struct_results{$hom_tool}{$prot_name}{$locus}} = @data;
-								$all_results{$prot_name}{$locus}[3] += $data[3];
+						elsif ($hom_tool eq "GESAMT"){
+							if ($all_results{$prot_name}{$locus}){
+								unless ($all_results{$prot_name}{$locus}{"GESAMT"}){
+									@{$all_results{$prot_name}{$locus}{"GESAMT"}} = @data;
+									@{$struct_results{$hom_tool}{$prot_name}{$locus}} = @data;
+									$all_results{$prot_name}{$locus}{"SCORE"} += $data[3];
+									$loci_count{"stc"}{$locus} ++;
+								}
+							}
+							else{
+								@{$all_results{$prot_name}{$locus}{"GESAMT"}} = @data;
+								$all_results{$prot_name}{$locus}{"SCORE"} = $data[3];
 								$loci_count{"stc"}{$locus} ++;
 							}
-						}
-						else{
-							@{$all_results{$prot_name}{$locus}[2]} = @data;
-							$all_results{$prot_name}{$locus}[3] = $data[3];
-							$loci_count{"stc"}{$locus} ++;
 						}
 					}
 				}
@@ -371,9 +373,9 @@ foreach my $prot (sort(keys(%proteins))){
 			print OUT "[N/A])\n";
 		}
 
-		foreach my $locus (sort{$all_results{$prot}{$b}[3] <=> $all_results{$prot}{$a}[3]}(keys(%{$all_results{$prot}}))){
+		foreach my $locus (sort{$all_results{$prot}{$b}{"SCORE"} <=> $all_results{$prot}{$a}{"SCORE"}}(keys(%{$all_results{$prot}}))){
 
-			my $score = $all_results{$prot}{$locus}[2];
+			my $score = $all_results{$prot}{$locus}{"SCORE"};
 			
 			print OUT "$locus";
 			
@@ -384,9 +386,9 @@ foreach my $prot (sort(keys(%proteins))){
 				print OUT "\t-";
 			}
 
-			if ($all_results{$prot}{$locus}[0]){
+			if ($all_results{$prot}{$locus}{"SEQ"}){
 				$loci_record{"seq"}{$locus}++;
-				my @seq_data = @{$all_results{$prot}{$locus}[0]};
+				my @seq_data = @{$all_results{$prot}{$locus}{"SEQ"}};
 				my ($seq_accession, $seq_pident, $seq_length, $seq_mismatch) = @seq_data[0..3];
 				my ($seq_gapopen, $seq_qstart, $seq_qend, $seq_sstart) = @seq_data[4..8];
 				my ($seq_send, $seq_eval, $seq_bitscore) = @seq_data[8..10];
@@ -399,9 +401,9 @@ foreach my $prot (sort(keys(%proteins))){
 				print OUT "\t-"x2;
 			}
 
-			if ($all_results{$prot}{$locus}[1]){
+			if ($all_results{$prot}{$locus}{"FOLDSEEK"}){
 				$loci_record{"stc"}{$locus}++;
-				my @stc_data = @{$all_results{$prot}{$locus}[1]};
+				my @stc_data = @{$all_results{$prot}{$locus}{"FOLDSEEK"}};
 				my ($stc_accession, $stc_pdb, $stc_source) = @stc_data[0..2];
 				my ($eval) = $stc_data[11];
 				# print OUT "\t".$qscore."\t".$stc_pdb."\t".$stc_source."\t(".$loci_record{"stc"}{$locus}."/".$loci_count{"stc"}{$locus}.")";
@@ -411,9 +413,9 @@ foreach my $prot (sort(keys(%proteins))){
 				print OUT "\t-"x3;
 			}
 
-			if ($all_results{$prot}{$locus}[2]){
+			if ($all_results{$prot}{$locus}{"GESAMT"}){
 				$loci_record{"stc"}{$locus}++;
-				my @stc_data = @{$all_results{$prot}{$locus}[2]};
+				my @stc_data = @{$all_results{$prot}{$locus}{"GESAMT"}};
 				my ($stc_accession, $stc_pdb, $stc_source, $qscore) = @stc_data[0..3];
 				# print OUT "\t".$qscore."\t".$stc_pdb."\t".$stc_source."\t(".$loci_record{"stc"}{$locus}."/".$loci_count{"stc"}{$locus}.")";
 				print OUT "\t".$qscore."\t".$stc_pdb."\t".$stc_source;
