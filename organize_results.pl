@@ -2,7 +2,7 @@
 ## Pombert Lab 2022
 
 my $name = 'organize_results.pl';
-my $version = '1.6.0';
+my $version = '1.6.1';
 my $updated = '2022-07-22';
 
 use strict;
@@ -223,63 +223,65 @@ my %struct_results;
 foreach my $hom_tool (sort(keys(%struct_files))){
 	print($hom_tool."\n");
 	my $struct_file = $struct_files{$hom_tool};
-	open IN, "<", $struct_file or die "Unable to access $struct_file: $!\n";
+	if (-f $struct_file){
+		open IN, "<", $struct_file or die "Unable to access $struct_file: $!\n";
 
-	## Track PDB code
-	my $struct;
+		## Track PDB code
+		my $struct;
 
-	while (my $line = <IN>){
-		chomp($line);
-		unless($line eq "" || $line =~ /^###/){
-			if ($line =~ /^## (\w+)/){
-				$struct = $1;
-			}
-			else{
-
-				my ($prot_name, $accession) = @{$struct_link{$struct}};
-				
-				## Convert line to array
-				my @data = split("\t",$line);
-				
-				my $locus = shift(@data);
-				unshift(@data,$struct);
-				unshift(@data,$accession);
-
-				## Use only the best hit per locus
-				if ($hom_tool eq "FOLDSEEK"){
-					if ($all_results{$prot_name}{$locus}){
-						unless ($all_results{$prot_name}{$locus}[1]){
-							@{$all_results{$prot_name}{$locus}[1]} = @data;
-							@{$struct_results{$hom_tool}{$prot_name}{$locus}} = @data;
-							$all_results{$prot_name}{$locus}[3] -= $data[11];
-							$loci_count{"stc"}{$locus} ++;
-						}
-					}
-					else{
-						@{$all_results{$prot_name}{$locus}[1]} = @data;
-						$all_results{$prot_name}{$locus}[3] = $data[11];
-						$loci_count{"stc"}{$locus} ++;
-					}
+		while (my $line = <IN>){
+			chomp($line);
+			unless($line eq "" || $line =~ /^###/){
+				if ($line =~ /^## (\w+)/){
+					$struct = $1;
 				}
-				elsif ($hom_tool eq "GESAMT"){
-					if ($all_results{$prot_name}{$locus}){
-						unless ($all_results{$prot_name}{$locus}[2]){
-							@{$all_results{$prot_name}{$locus}[2]} = @data;
-							@{$struct_results{$hom_tool}{$prot_name}{$locus}} = @data;
-							$all_results{$prot_name}{$locus}[3] += $data[3];
+				else{
+
+					my ($prot_name, $accession) = @{$struct_link{$struct}};
+					
+					## Convert line to array
+					my @data = split("\t",$line);
+					
+					my $locus = shift(@data);
+					unshift(@data,$struct);
+					unshift(@data,$accession);
+
+					## Use only the best hit per locus
+					if ($hom_tool eq "FOLDSEEK"){
+						if ($all_results{$prot_name}{$locus}){
+							unless ($all_results{$prot_name}{$locus}[1]){
+								@{$all_results{$prot_name}{$locus}[1]} = @data;
+								@{$struct_results{$hom_tool}{$prot_name}{$locus}} = @data;
+								$all_results{$prot_name}{$locus}[3] -= $data[11];
+								$loci_count{"stc"}{$locus} ++;
+							}
+						}
+						else{
+							@{$all_results{$prot_name}{$locus}[1]} = @data;
+							$all_results{$prot_name}{$locus}[3] = $data[11];
 							$loci_count{"stc"}{$locus} ++;
 						}
 					}
-					else{
-						@{$all_results{$prot_name}{$locus}[2]} = @data;
-						$all_results{$prot_name}{$locus}[3] = $data[3];
-						$loci_count{"stc"}{$locus} ++;
+					elsif ($hom_tool eq "GESAMT"){
+						if ($all_results{$prot_name}{$locus}){
+							unless ($all_results{$prot_name}{$locus}[2]){
+								@{$all_results{$prot_name}{$locus}[2]} = @data;
+								@{$struct_results{$hom_tool}{$prot_name}{$locus}} = @data;
+								$all_results{$prot_name}{$locus}[3] += $data[3];
+								$loci_count{"stc"}{$locus} ++;
+							}
+						}
+						else{
+							@{$all_results{$prot_name}{$locus}[2]} = @data;
+							$all_results{$prot_name}{$locus}[3] = $data[3];
+							$loci_count{"stc"}{$locus} ++;
+						}
 					}
 				}
 			}
 		}
+		close IN;
 	}
-	close IN;
 }
 
 ###################################################################################################
