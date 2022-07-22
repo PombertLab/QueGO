@@ -230,9 +230,6 @@ if (@predictions){
 				");
 				$archives{$db_name} = $arch_dir."/FOLDSEEK/".$db_name;
 			}
-			else{
-				continue;
-			}
 		}
 	}
 	### Make GESAMT archive from structure sets
@@ -248,9 +245,6 @@ if (@predictions){
 					  -pdb $structure_set
 				");
 				$archives{$db_name} =  $arch_dir."/GESAMT/".$db_name;
-			}
-			else{
-				continue;
 			}
 		}
 	}
@@ -281,7 +275,7 @@ for my $arch (keys(%archives)){
 			$foldseek_script \\
 			  --query \\
 			  --db $arch_path/$arch \\
-			  --input $pdb_dir/*\.pdb\.* \\
+			  --input $pdb_dir/*\.pdb* \\
 			  --outdir $struct_res_dir/FOLDSEEK/$arch \\
 			  --gzip
 		");
@@ -292,7 +286,7 @@ for my $arch (keys(%archives)){
 				--cpu $threads \\
 				--query \\
 				--arch $arch \\
-				--input $pdb_dir/*\.pdb\.* \\
+				--input $pdb_dir/*\.pdb* \\
 				--outdir $struct_res_dir/GESAMT/$arch \\
 				--gzip \\
 				-mode normal
@@ -318,5 +312,5 @@ system "$metadata_script \\
 		  --metadata $uniprot_dir/metadata.log \\
 		  --foldseek $results_dir/FoldSeek_parsed_results.matches \\
 		  --gesamt $results_dir/GESAMT_parsed_results.matches \\
-		  --outfile $results_dir/compiled_results_w_metadata.tsv
+		  --outfile $results_dir
 ";
