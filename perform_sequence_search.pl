@@ -2,8 +2,8 @@
 ## Pombert Lab, 2022
 
 my $name = 'perform_sequence_search.pl';
-my $version = '0.0.1';
-my $updated = '2022-07-03';
+my $version = '0.0.2';
+my $updated = '2022-07-22';
 
 use strict;
 use warnings;
@@ -31,11 +31,11 @@ my $eval = "1e-10";
 my $outdir = "SEQUENCE_SEARCH";
 
 GetOptions(
-	'f|fasta=s{1,}' => \@subs,
+	'f|faa=s{1,}' => \@subs,
 	'u|uni=s' => \$queries,
 	't|threads=s' => \$threads,
 	'e|eval=s' => \$eval,
-	'o|out=s' => \$outdir,
+	'o|outdir=s' => \$outdir,
 );
 
 my $results_dir = $outdir."/"."RESULTS";
@@ -56,7 +56,6 @@ opendir(DIR,$queries) or die "Unable to access directory $queries: $!\n";
 foreach my $item (readdir(DIR)){
 	unless (-d $queries."/".$item){
 		my ($accession) = $item =~ /(\w+)\.fasta$/;
-		print $accession."\n";
 		unless (-f $results_dir."/".$accession.".diamond.6"){
 			system("
 				diamond \\
