@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 ## Pombert Lab 2022
-my $version = '0.2.2';
+my $version = '0.2.3';
 my $name = 'run_foldseek.pl';
 my $updated = '2022-07-22';
 
@@ -152,7 +152,9 @@ if ($query){
 			
 			if ($gnuzip){
 				## Compressing data with GZIP to save some space
-				system "gzip $outdir/$pdb.fseek";
+				if (-e "$outdir/$pdb.fseek"){
+					system "gzip $outdir/$pdb.fseek";
+				}
 			}
 		}
 
