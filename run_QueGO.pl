@@ -1,8 +1,8 @@
 #!/usr/bin/perl
 ## Pombert Lab 2022
 my $name = "run_QueGO.pl";
-my $version = "0.7.0";
-my $updated = "2022-07-22";
+my $version = "0.7.1";
+my $updated = "2022-07-23";
 
 use strict;
 use warnings;
@@ -34,7 +34,7 @@ OPTIONS
 -u (--uniprot)		Previously performed UNIPROT_SCRAP_RESULTS
 
 ## SEQUENCE HOMOLOGY OPTIONS ##
--f (--fastas)	Files containing protein sequences (sequences extracted automatically from provided predicted structures if ignored)
+-f (--fastas)	Files containing protein sequences (FASTAs extracted automatically from provided predicted structures if ignored)
 -se (--seq_eval)	E-value cut-off [Default: 1e-10]
 
 ## 3D HOMOLOGY OPTIONS ##
@@ -100,6 +100,7 @@ my $scraper_script = $pipeline_dir."/uniprot_scraper.py";
 my $extract_script = $pipeline_dir."/extract_pdb_sequence.pl";
 my $seq_hom_script = $pipeline_dir."/perform_sequence_search.pl";
 my $foldseek_script = $pipeline_dir."/run_foldseek.pl";
+my $mican_script = $pipeline_dir."/run_MICAN.pl";
 my $gesamt_script = $pipeline_dir."/run_GESAMT.pl";
 my $parser_script = $pipeline_dir."/parse_3D_homology_results.pl";
 my $metadata_script = $pipeline_dir."/organize_results.pl";
@@ -336,6 +337,7 @@ for my $arch (keys(%archives)){
 			  --outdir $struct_res_dir/FOLDSEEK/$arch \\
 			  --gzip
 		");
+
 	}
 	elsif (uc($hom_tool) eq "GESAMT"){
 		system ("
@@ -349,6 +351,15 @@ for my $arch (keys(%archives)){
 				-mode normal
 		");
 	}
+}
+
+if (uc($hom_tool) eq "FOLDSEEK"){
+	system ("
+		$mican_script \\
+			--results_dir $struct_res_dir \\
+			--uniprot_pdb $pdb_dir \\
+			--predict_dir @predictions
+	");
 }
 
 ###################################################################################################
