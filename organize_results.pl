@@ -2,7 +2,7 @@
 ## Pombert Lab 2022
 
 my $name = 'organize_results.pl';
-my $version = '1.6.3';
+my $version = '1.6.4';
 my $updated = '2022-07-22';
 
 use strict;
@@ -206,7 +206,7 @@ if ($seqnc_file){
 				@{$seq_results{$prot_name}{$locus}} = @data;
 
 				## Add the eval to score keeper
-				$all_results{$prot_name}{$locus}{"SCORE"} = -$data[9];
+				$all_results{$prot_name}{$locus}{"SCORE"} = (-log($data[9])/40)
 			}
 		}
 	}
@@ -253,13 +253,13 @@ foreach my $hom_tool (sort(keys(%struct_files))){
 								unless ($all_results{$prot_name}{$locus}{"FOLDSEEK"}){
 									@{$all_results{$prot_name}{$locus}{"FOLDSEEK"}} = @data;
 									@{$struct_results{$hom_tool}{$prot_name}{$locus}} = @data;
-									$all_results{$prot_name}{$locus}{"SCORE"} -= $data[11];
+									$all_results{$prot_name}{$locus}{"SCORE"} += (-log($data[11])/40);
 									$loci_count{"stc"}{$locus} ++;
 								}
 							}
 							else{
 								@{$all_results{$prot_name}{$locus}{"FOLDSEEK"}} = @data;
-								$all_results{$prot_name}{$locus}{"SCORE"} = $data[11];
+								$all_results{$prot_name}{$locus}{"SCORE"} = (-log($data[11])/40);
 								$loci_count{"stc"}{$locus} ++;
 							}
 						}
@@ -294,7 +294,7 @@ open OUT, ">", $outdir."/sequence_results.tsv" or die "Unable to write to file $
 print OUT "### LOCUS\tANNOTATION\tACCESSION\tPIDENT\tLENGTH\tMISMATCH\tGAPOPEN\tQSTART\tQEND\tSSTART\tSEND\tEVAL\tBITSCORE\n\n";
 foreach my $prot (sort(keys(%seq_results))){
 	print OUT "## $prot\n";
-	foreach my $locus (sort{$seq_results{$prot}{$b}[9] <=> $seq_results{$prot}{$a}[9]}(keys(%{$seq_results{$prot}}))){
+	foreach my $locus (sort{$seq_results{$prot}{$a}[9] <=> $seq_results{$prot}{$b}[9]}(keys(%{$seq_results{$prot}}))){
 		print OUT $locus;
 		if ($annotations{$locus}){
 			print OUT "\t".$annotations{$locus}."\t";
