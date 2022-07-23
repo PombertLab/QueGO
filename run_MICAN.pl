@@ -2,7 +2,7 @@
 ## Pombert Lab 2022
 
 my $name = "run_MICAN.pl";
-my $version = "0.1.0";
+my $version = "0.1.1";
 my $updated = "2022-07-23";
 
 use strict;
@@ -33,9 +33,9 @@ my $uniprot_dir;
 my @predicted_dirs;
 
 GetOptions(
-	'-r|--results_dir=s' => \$results_dir,
-	'-u|--uniprot=s' => \$uniprot_dir,
-	'-p|--predict_dirs=s{1,}' => \@predicted_dirs,
+	'r|results_dir=s' => \$results_dir,
+	'u|uniprot_pdb=s' => \$uniprot_dir,
+	'p|predict_dir=s{1,}' => \@predicted_dirs,
 );
 
 my %predicted_dirs;
@@ -54,13 +54,27 @@ while (my $hom_tool_dir = readdir(ODIR)){
 		opendir(MDIR,$results_dir."/".$hom_tool_dir) or die "Cannot access $results_dir/$hom_tool_dir: $!\n";;
 		while (my $structure_set_dir = readdir(MDIR)){
 			if ((-d $results_dir."/".$hom_tool_dir."/".$structure_set_dir) && ($structure_set_dir !~ /^\./)){
-				opendir(IDIR,$results_dir."/".$hom_tool_dir."/".$structure_set_dir) or die "Cannot access $results_dir/$hom_tool_dir/$structure_set_dir";
 				unless (-d $results_dir."/".$hom_tool_dir."_w_MICAN/".$structure_set_dir){
 					make_path($results_dir."/".$hom_tool_dir."_w_MICAN/".$structure_set_dir,{mode=>0755});
 				}
+				opendir(IDIR,$results_dir."/".$hom_tool_dir."/".$structure_set_dir) or die "Cannot access $results_dir/$hom_tool_dir/$structure_set_dir";
+				
+				my $file_count = () = readdir(IDIR);
+				rewinddir(IDIR);
+				my $file_counter = 0;
+				
 				while (my $file = readdir(IDIR)){
 					if ((-f $results_dir."/".$hom_tool_dir."/".$structure_set_dir."/".$file) && ($file ne "error.log")){
 						my ($outfile) = $file =~ /^(\w+)/;
+						$file_counter++;
+
+						my $done = int(($file_counter/$file_count)*100);
+						my $remaining = 100-$done;
+
+						my $bar = "\t[".("|"x$done).("."x$remaining)."]\t($file_counter/$file_count)\n";
+
+						print($bar."Working on $outfile...\n");
+
 						unless (-f "$results_dir/${hom_tool_dir}_w_MICAN/$structure_set_dir/${outfile}_w_tmscore.fseek.gz"){
 							my $gzip = "";
 							if ($file =~ /\.gz$/){
@@ -105,7 +119,6 @@ while (my $hom_tool_dir = readdir(ODIR)){
 											($rank,$sTMscore,$TMscore,$Dali_Z,$SPscore,$Length,$RMSD,$Seq_Id) = split(/\s+/,$1);
 											push(@data,$TMscore);
 											push(@results,[@data]);
-											# print "$sTMscore\t$TMscore\t$Dali_Z\t$SPscore\t$Length\t$RMSD\t$Seq_Id\n";
 										}
 									}
 								}
@@ -130,3 +143,5 @@ while (my $hom_tool_dir = readdir(ODIR)){
 	}
 }
 close ODIR;
+
+system("rm -r temp");
