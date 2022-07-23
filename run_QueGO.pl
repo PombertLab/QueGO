@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 ## Pombert Lab 2022
 my $name = "run_QueGO.pl";
-my $version = "0.6.6";
+my $version = "0.7.0";
 my $updated = "2022-07-22";
 
 use strict;
@@ -33,12 +33,19 @@ OPTIONS
 -m (--method)		Method used to obtain structure [Default = All] (X-ray, NMR, Predicted)
 -u (--uniprot)		Previously performed UNIPROT_SCRAP_RESULTS
 
-## HOMOLOGY OPTIONS ##
--s (--struct_sets)	Directories containing predicted protein structures
+## SEQUENCE HOMOLOGY OPTIONS ##
+-f (--fastas)	Files containing protein sequences (sequences extracted automatically from provided predicted structures if ignored)
+-se (--seq_eval)	E-value cut-off [Default: 1e-10]
+
+## 3D HOMOLOGY OPTIONS ##
+-s (--struct_sets)	Directories containing predicted protein structures (FASTAs extracted automatically if --fastas not provided)
 -h (--hom_tool)		3D Homology tool to use (FoldSeek or GESAMT) [Default: FoldSeek]
--a (--homology_arch)	3D homology archives (Archive must be compatible with --hom_tool)
+-r (--homology_arch)	3D homology archives (Archive must be compatible with --hom_tool)
+-3e (--3D_eval)		E-value cut-off for FoldSeek [Default: 1e-10]
+-q (--qscore)		Q-score cut-off for GESAMT [Default: 0.3]
 
 ## GENERAL OPTIONS ##
+-a (--annot)		TSV file containing existing annotations for predicted proteins
 -t (--threads)		Number of threads to use [Default = 4]
 -o (--outdir)		Output directory [Default = QueGO_Results]
 EXIT
@@ -48,32 +55,50 @@ die("\n$usage\n") unless(@ARGV);
 my $go_keyword;
 my $verified_only;
 my @method;
+my $uniprot;
+
+my @prot_fasta;
+my $seq_eval = 1e-10;
+
 my @predictions;
 my $hom_tool = "FOLDSEEK";
 my @archives;
-my $prot_fasta;
+my $fs_eval = 1e-10;
+my $qscore = 0.3;
+
+my $annot_file;
 my $threads = 4;
-my $uniprot;
 my $outdir = "QueGO_Results";
+
 my $custom;
 
 GetOptions(
 	'k|go_keyword=s' => \$go_keyword,
 	'v|verfied_only' => \$verified_only,
 	'm|method=s{1,}' => \@method,
+	'u|uniprot=s' => \$uniprot,
+
+	'p|prot_fasta=s{1,}' => \@prot_fasta,
+	'se|seq_eval=s' => \$seq_eval,
+
 	's|pred_struct=s{1,}' => \@predictions,
 	'h|hom_tool=s' => \$hom_tool,
-	'a|archive=s{1,}' => \@archives,
-	'p|prot_fasta=s{1,}' => \$prot_fasta,
+	'r|homology_arch=s{1,}' => \@archives,
+	'3e|3D_eval=s' => \$fs_eval,
+	'q|qscore=s' => \$qscore,
+
+	'a|annot=s' => \$annot_file,
 	't|threads=s' => \$threads,
-	'u|uniprot=s' => \$uniprot,
 	'o|outdir=s' => \$outdir,
+
 	'c|custom=s' => \$custom, ## shhh, this is a secret tool for debugging purposes
 );
 
 ## Setup script variables
 my ($script,$pipeline_dir) = fileparse($0);
 my $scraper_script = $pipeline_dir."/uniprot_scraper.py";
+my $extract_script = $pipeline_dir."/extract_pdb_sequence.pl";
+my $seq_hom_script = $pipeline_dir."/perform_sequence_search.pl";
 my $foldseek_script = $pipeline_dir."/run_foldseek.pl";
 my $gesamt_script = $pipeline_dir."/run_GESAMT.pl";
 my $parser_script = $pipeline_dir."/parse_3D_homology_results.pl";
@@ -263,6 +288,38 @@ if (@predictions){
 }
 
 ###################################################################################################
+## Extract PDB amino acid sequences
+###################################################################################################
+unless (@prot_fasta){
+	foreach my $structure_set (@predictions){
+		system "
+			$extract_script \\
+			  --pdb $structure_set/*.pdb* \\
+			  --out $seq_hom_dir/FASTA
+		";
+	}
+	system "cat $seq_hom_dir/FASTA/*.faa > $seq_hom_dir/proteins.faa";
+}
+else{
+	foreach my $fasta (@prot_fasta){
+		system "cat $fasta >> $seq_hom_dir/proteins.faa";
+	}
+}
+
+###################################################################################################
+## Perform sequence homology searches
+###################################################################################################
+
+system "
+	$seq_hom_script \\
+	  --faa $seq_hom_dir/proteins.faa \\
+	  --uni $fasta_dir \\
+	  --threads $threads \\
+	  --eval $seq_eval \\
+	  --outdir $seq_hom_dir
+";
+
+###################################################################################################
 ## Perform 3D homology searches
 ###################################################################################################
 
@@ -301,6 +358,8 @@ for my $arch (keys(%archives)){
 system "$parser_script \\
 		--gesamt $struct_res_dir/GESAMT/* \\
 		--foldseek $struct_res_dir/FOLDSEEK/* \\
+		--qscore $qscore \\
+		--eval $fs_eval \\
 		--outdir $results_dir
 ";
 
@@ -312,5 +371,7 @@ system "$metadata_script \\
 		  --metadata $uniprot_dir/metadata.log \\
 		  --foldseek $results_dir/FoldSeek_parsed_results.matches \\
 		  --gesamt $results_dir/GESAMT_parsed_results.matches \\
+		  --seqnc $seq_hom_dir/All_sequence_results.tsv \\
+		  --annot $annot_file \\
 		  --outfile $results_dir
 ";
