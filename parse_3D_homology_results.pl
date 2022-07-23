@@ -25,7 +25,7 @@ OPTIONS
 -g (--gesamt)		Directory(s) containing GESAMT results
 -f (--foldseek)		Directory(s) containing FoldSeek results
 -q (--qscore)		Q-score cut-off value [Default = 0.3]
--e (--eval)		E-value cut-off value [Default = 1e-10]
+-t (--tm)		TM cut-off value [Default = 0.3]
 -b (--best)		Keep best 'X' results [Default = 25]
 -a (--all)		Keep all results
 -o (--outdir)		Output directory [Default = "./3D_homology_results_parsed"]
@@ -35,7 +35,7 @@ die("\n$usage\n") unless(@ARGV);
 
 my %result_dirs;
 my $qscore_cut = 0.3;
-my $eval_cut = 1e-10;
+my $tm_cut = 0.3;
 my $best = 25;
 my $all;
 my $outdir = "3D_homology_results_parsed";
@@ -44,7 +44,7 @@ GetOptions(
 	'g|gesamt=s{1,}' => \@{$result_dirs{"GESAMT"}},
 	'f|foldseek=s{1,}' => \@{$result_dirs{"FoldSeek"}},
 	'q|qscore=s' => \$qscore_cut,
-	'e|eval=s' => \$eval_cut,
+	'e|eval=s' => \$tm_cut,
 	'b|best=s' => \$best,
 	'a|all' => \$all,
 	'o|outdir=s' => \$outdir,
@@ -110,11 +110,11 @@ foreach my $predictor (keys(%result_dirs)){
 						my $query_struct;
 						my $gzip;
 
-						if ($file =~ /(\w+).fseek.gz$/){
+						if ($file =~ /(\w+)_w_MICAN.fseek.gz$/){
 							$query_struct = $1;
 							$gzip = ":gzip";
 						}
-						elsif ($file =~ /(\w+).fseek$/){
+						elsif ($file =~ /(\w+)_w_MICAN.fseek$/){
 							$query_struct = $1;
 						}
 
@@ -124,8 +124,8 @@ foreach my $predictor (keys(%result_dirs)){
 							unless(($line =~ /^\#/)||($line eq '')){
 								my @data = split('\s+',$line);
 								my ($predicted_structure) = $data[1] =~ /^(\w+)/;
-								if ($data[10] <= $eval_cut){
-									push(@{$results{$predictor}{$query_struct}{$predicted_structure}},($pred_struct_source,@data[2..11]));
+								if ($data[12] <= $tm_cut){
+									push(@{$results{$predictor}{$query_struct}{$predicted_structure}},($pred_struct_source,@data[2..12]));
 								}
 							}
 						}
@@ -157,17 +157,17 @@ foreach my $predictor (keys(%results)){
 		}
 	}
 	elsif($predictor eq "FoldSeek"){
-		print ALL ("### Locus\tSource\tfident\talnlen\tmismatch.\tgapopen\tqstart\tqend\ttstart\ttend\teval\tbits\n\n");
+		print ALL ("### Locus\tSource\tfident\talnlen\tmismatch.\tgapopen\tqstart\tqend\ttstart\ttend\teval\tbits\ttmscore\n\n");
 		foreach my $query_struct (sort(keys(%{$results{$predictor}}))){
 			print ALL ("## $query_struct\n");
 			my $query_count = 0;
-			foreach my $predicted_structure (sort{$results{$predictor}{$query_struct}{$b}[1] <=> $results{$predictor}{$query_struct}{$a}[1]}(keys(%{$results{$predictor}{$query_struct}}))){
-				my ($pred_struct_source,$fident,$alnlen,$mismatch,$gapopen,$qstart,$qend,$tstart,$tend,$eval,$bits) = @{$results{$predictor}{$query_struct}{$predicted_structure}};
+			foreach my $predicted_structure (sort{$results{$predictor}{$query_struct}{$b}[11] <=> $results{$predictor}{$query_struct}{$a}[11]}(keys(%{$results{$predictor}{$query_struct}}))){
+				my ($pred_struct_source,$fident,$alnlen,$mismatch,$gapopen,$qstart,$qend,$tstart,$tend,$eval,$bits,$tmscore) = @{$results{$predictor}{$query_struct}{$predicted_structure}};
 				if($all){
-					print ALL ("$predicted_structure\t$pred_struct_source\t$fident\t$alnlen\t$mismatch\t$gapopen\t$qstart\t$qend\t$tstart\t$tend\t$eval\t$bits\n");
+					print ALL ("$predicted_structure\t$pred_struct_source\t$fident\t$alnlen\t$mismatch\t$gapopen\t$qstart\t$qend\t$tstart\t$tend\t$eval\t$bits\t$tmscore\n");
 				}
 				elsif($query_count < $best){
-					print ALL ("$predicted_structure\t$pred_struct_source\t$fident\t$alnlen\t$mismatch\t$gapopen\t$qstart\t$qend\t$tstart\t$tend\t$eval\t$bits\n");
+					print ALL ("$predicted_structure\t$pred_struct_source\t$fident\t$alnlen\t$mismatch\t$gapopen\t$qstart\t$qend\t$tstart\t$tend\t$eval\t$bits\t$tmscore\n");
 				}
 				$query_count++;
 			}

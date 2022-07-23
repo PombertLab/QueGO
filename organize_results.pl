@@ -2,8 +2,8 @@
 ## Pombert Lab 2022
 
 my $name = 'organize_results.pl';
-my $version = '1.6.4';
-my $updated = '2022-07-22';
+my $version = '1.6.5';
+my $updated = '2022-07-23';
 
 use strict;
 use warnings;
@@ -253,13 +253,13 @@ foreach my $hom_tool (sort(keys(%struct_files))){
 								unless ($all_results{$prot_name}{$locus}{"FOLDSEEK"}){
 									@{$all_results{$prot_name}{$locus}{"FOLDSEEK"}} = @data;
 									@{$struct_results{$hom_tool}{$prot_name}{$locus}} = @data;
-									$all_results{$prot_name}{$locus}{"SCORE"} += (-log($data[11])/40);
+									$all_results{$prot_name}{$locus}{"SCORE"} += $data[13];
 									$loci_count{"stc"}{$locus} ++;
 								}
 							}
 							else{
 								@{$all_results{$prot_name}{$locus}{"FOLDSEEK"}} = @data;
-								$all_results{$prot_name}{$locus}{"SCORE"} = (-log($data[11])/40);
+								$all_results{$prot_name}{$locus}{"SCORE"} = $data[13];
 								$loci_count{"stc"}{$locus} ++;
 							}
 						}
@@ -331,10 +331,10 @@ foreach my $hom_tool (keys(%struct_results)){
 		}
 	}
 	elsif ($hom_tool eq "FOLDSEEK"){
-		print OUT "### LOCUS\tANNOTATION\tACCESSION\tPDB\tSOURCE\tFIDENT\tALNLEN\tMISMATCH\tGAPOPEN\tQSTART\tQEND\tTSTART\tTEND\tEVAL\tBITS\n\n";
+		print OUT "### LOCUS\tANNOTATION\tACCESSION\tPDB\tSOURCE\tFIDENT\tALNLEN\tMISMATCH\tGAPOPEN\tQSTART\tQEND\tTSTART\tTEND\tEVALUE\tBITS\tTMSCORE\n\n";
 		foreach my $prot (sort(keys(%{$struct_results{$hom_tool}}))){
 			print OUT "## $prot\n";
-			foreach my $locus (sort{$struct_results{$hom_tool}{$prot}{$b}[11] <=> $struct_results{$hom_tool}{$prot}{$a}[11]}(keys(%{$struct_results{$hom_tool}{$prot}}))){
+			foreach my $locus (sort{$struct_results{$hom_tool}{$prot}{$b}[13] <=> $struct_results{$hom_tool}{$prot}{$a}[13]}(keys(%{$struct_results{$hom_tool}{$prot}}))){
 				if ($annotations{$locus}){
 					print OUT $locus."\t".$annotations{$locus}."\t";
 				}
@@ -358,7 +358,7 @@ my %loci_record;
 # print OUT "### LOCUS\tANNOTATION\tSEQ_HOM_EVAL\tACCESSION\t(SEQ_HOM_HIT/SEQ_HOM_MATCHES)\t";
 # print OUT "STC_HOM_QSCORE\tSTC_PDB\tPDB_SOURCE\t(STC_HOM_HIT/STC_HOM_MATCHES)\n\n";
 
-print OUT "### LOCUS\tANNOTATION\tSEQ_HOM_EVALUE\tSEQ_FASTA\tFOLDSEEK_EVALUE\tFOLDSEEK_PDB\tFOLDSEEK_DB\tGESAMT_QSCORE\tGESAMT_PDB\tGESAMT_DB\n\n";
+print OUT "### LOCUS\tANNOTATION\tSEQ_HOM_EVALUE\tSEQ_FASTA\tFOLDSEEK_TMSCORE\tFOLDSEEK_PDB\tFOLDSEEK_DB\tGESAMT_QSCORE\tGESAMT_PDB\tGESAMT_DB\n\n";
 
 foreach my $prot (sort(keys(%proteins))){
 
@@ -405,9 +405,9 @@ foreach my $prot (sort(keys(%proteins))){
 				$loci_record{"stc"}{$locus}++;
 				my @stc_data = @{$all_results{$prot}{$locus}{"FOLDSEEK"}};
 				my ($stc_accession, $stc_pdb, $stc_source) = @stc_data[0..2];
-				my ($eval) = $stc_data[11];
+				my ($tmscore) = $stc_data[13];
 				# print OUT "\t".$qscore."\t".$stc_pdb."\t".$stc_source."\t(".$loci_record{"stc"}{$locus}."/".$loci_count{"stc"}{$locus}.")";
-				print OUT "\t".$eval."\t".$stc_pdb."\t".$stc_source;
+				print OUT "\t".$tmscore."\t".$stc_pdb."\t".$stc_source;
 			}
 			else{
 				print OUT "\t-"x3;
