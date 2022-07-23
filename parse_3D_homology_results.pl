@@ -35,7 +35,7 @@ die("\n$usage\n") unless(@ARGV);
 
 my %result_dirs;
 my $qscore_cut = 0.3;
-my $eval_cut = 1e-20;
+my $eval_cut = 1e-10;
 my $best = 25;
 my $all;
 my $outdir = "3D_homology_results_parsed";
@@ -44,6 +44,7 @@ GetOptions(
 	'g|gesamt=s{1,}' => \@{$result_dirs{"GESAMT"}},
 	'f|foldseek=s{1,}' => \@{$result_dirs{"FoldSeek"}},
 	'q|qscore=s' => \$qscore_cut,
+	'e|eval=s' => \$eval_cut,
 	'b|best=s' => \$best,
 	'a|all' => \$all,
 	'o|outdir=s' => \$outdir,
