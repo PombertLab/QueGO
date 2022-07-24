@@ -1,8 +1,8 @@
 #!/usr/bin/perl
 ## Pombert Lab 2022
 my $name = "run_QueGO.pl";
-my $version = "0.7.1";
-my $updated = "2022-07-23";
+my $version = "0.8.0";
+my $updated = "2022-07-24";
 
 use strict;
 use warnings;
@@ -10,6 +10,7 @@ use Getopt::Long qw(GetOptions);
 use File::Path qw(make_path);
 use File::Basename;
 use Cwd qw(abs_path);
+use Term::ANSIColor;
 
 my $usage = <<"EXIT";
 NAME		$name
@@ -25,8 +26,6 @@ USAGE		$name \\
 		  -t 4 \\
 		  -o QueGO_telomere_Results
 
-OPTIONS
-
 ## UNIPROT SCRAPER OPTIONS ##
 -k (--go_keyword)	Search using gene ontolgy keyword
 -v (--verified_only)	Search for genes that have been verified by experimental evidence
@@ -34,23 +33,33 @@ OPTIONS
 -u (--uniprot)		Previously performed UNIPROT_SCRAP_RESULTS
 
 ## SEQUENCE HOMOLOGY OPTIONS ##
--f (--fastas)	Files containing protein sequences (FASTAs extracted automatically from provided predicted structures if ignored)
--se (--seq_eval)	E-value cut-off [Default: 1e-10]
+-f (--fastas)		Files containing protein sequences (FASTAs extracted automatically from provided predicted structures if ignored)
+-e (--eval)		E-value cut-off [Default: 1e-10]
 
 ## 3D HOMOLOGY OPTIONS ##
 -s (--struct_sets)	Directories containing predicted protein structures (FASTAs extracted automatically if --fastas not provided)
 -h (--hom_tool)		3D Homology tool to use (FoldSeek or GESAMT) [Default: FoldSeek]
 -r (--homology_arch)	3D homology archives (Archive must be compatible with --hom_tool)
--3e (--3D_eval)		E-value cut-off for FoldSeek [Default: 1e-10]
+-t (--tmscore)		TM-score cut-off for FoldSeek [Default: 0.3]
 -q (--qscore)		Q-score cut-off for GESAMT [Default: 0.3]
 
 ## GENERAL OPTIONS ##
 -a (--annot)		TSV file containing existing annotations for predicted proteins
--t (--threads)		Number of threads to use [Default = 4]
+-w (--threads)		Number of threads to use [Default = 4]
 -o (--outdir)		Output directory [Default = QueGO_Results]
 EXIT
 
 die("\n$usage\n") unless(@ARGV);
+
+my @arguments;
+
+for my $arg (@ARGV){
+	push(@arguments,$arg);
+}
+
+my $master_start = time();
+my $start;
+my $stop;
 
 my $go_keyword;
 my $verified_only;
@@ -63,7 +72,7 @@ my $seq_eval = 1e-10;
 my @predictions;
 my $hom_tool = "FOLDSEEK";
 my @archives;
-my $fs_eval = 1e-10;
+my $fs_tm = 0.3;
 my $qscore = 0.3;
 
 my $annot_file;
@@ -79,16 +88,16 @@ GetOptions(
 	'u|uniprot=s' => \$uniprot,
 
 	'p|prot_fasta=s{1,}' => \@prot_fasta,
-	'se|seq_eval=s' => \$seq_eval,
+	'e|eval=s' => \$seq_eval,
 
 	's|pred_struct=s{1,}' => \@predictions,
 	'h|hom_tool=s' => \$hom_tool,
 	'r|homology_arch=s{1,}' => \@archives,
-	'3e|3D_eval=s' => \$fs_eval,
+	't|tmscore=s' => \$fs_tm,
 	'q|qscore=s' => \$qscore,
 
 	'a|annot=s' => \$annot_file,
-	't|threads=s' => \$threads,
+	'w|threads=s' => \$threads,
 	'o|outdir=s' => \$outdir,
 
 	'c|custom=s' => \$custom, ## shhh, this is a secret tool for debugging purposes
@@ -134,11 +143,33 @@ my @dirs = (
 	$results_dir
 );
 
+print "\n\nSetting up working enviroment\n\n";
+
 foreach my $dir (@dirs){
 	unless(-d $dir){
+		print "\tMaking directory $dir...\n";
 		make_path($dir,{mode => 0755});
 	}
+	else{
+		print "\tDirectory $dir already exists...\n";
+	}
 }
+
+###################################################################################################
+## Setting up log file
+###################################################################################################
+
+open LOG, ">", "$outdir/run_QueGO.log";
+print LOG ($0);
+for my $arg (@arguments){
+	if(substr($arg,0,1) eq "-"){
+		print LOG (" \\\n$arg");
+	}
+	else{
+		print LOG (" $arg")
+	}
+}
+print LOG ("\n\n");
 
 ###################################################################################################
 ## Getting UniProt data either from new WebScrap or old archive
@@ -148,13 +179,25 @@ unless (-f "$uniprot_dir/metadata.log"){
 	### Use previously used scrap results
 	if ($uniprot){
 		if (-d "$uniprot"){
+			$start = time();
+			print LOG "\n\tCopying UniProt scrap started at ".localtime($start)."\n";
+			print "Utilizing previous UniProt scrap located at $uniprot...\n\n";
 			system "cp -r $uniprot/* $uniprot_dir/";
+			$stop = time();
+			print LOG "\tUniProt scrap copying completed at ".localtime($stop)." (".duration($stop,$start).")\n";
+		}
+		else {
+			print color 'red';
+			print "\n\n[E]  Could not access previous UniProt scrap located at $uniprot...\n\n";
+			print color 'reset';
+			exit;
 		}
 	}
 	### Perform UniProt scraping
 	elsif($go_keyword){
-		### Check if scrap has been done previously
-		
+		$start = time();
+		print LOG "\n\tUniProt scrap started at ".localtime($start)."\n";
+		print "Starting UniProt scrap...\n\n";
 		my $flags = "";
 		
 		if($go_keyword){
@@ -183,16 +226,25 @@ unless (-f "$uniprot_dir/metadata.log"){
 		";
 
 		unless(-f "$uniprot_dir/metadata.log"){
-			die "\n[E]  UniProt scraping failed\n";
+			print color 'red';
+			print "\n\n[E]  UniProt scraping failed\n\n";
+			print color 'reset';
+			exit;
 		}
-
+		$stop = time();
+		print LOG "\tUniProt scrap completed at ".localtime($stop)." (".duration($stop,$start).")\n";
 	}
 	else{
-		die "\n[E]  Please provide a GO keyword or UNIPROT_SCRAP_RESULTS directory!\n";
+		print color 'red';
+		print "\n\n[E]  Please provide a GO keyword or UNIPROT_SCRAP_RESULTS directory...\n\n";
+		print color 'reset';
+		exit;
 	}
 }
 else{
-	print "Previous UniProt scrap found at $uniprot_dir. Running on existing scrap results!\n";
+	print color 'yellow';
+	print "Previous UniProt scrap found at $uniprot_dir. Utilizing previous results...\n";
+	print color 'reset';
 }
 
 my %archives;
@@ -202,6 +254,10 @@ my %archives;
 ###################################################################################################
 
 if(@archives){
+
+	$start = time();
+
+	print LOG "\n\tCopying archives started at ".localtime($start)."...\n";
 	
 	### Copy pre-existing archives to new work enviroment
 	foreach my $archive (@archives){
@@ -210,6 +266,7 @@ if(@archives){
 
 		my $arch_tool = "FOLDSEEK";
 
+		## Checking if archive is GESAMT or FoldSeek
 		while (my $item = readdir(ARCH)){
 			unless (-d $archive."/"."$item"){
 				if ($item =~ /^gesamt.archive/){
@@ -221,19 +278,30 @@ if(@archives){
 
 		close ARCH;
 
+		print("Provided archive at $archive is a $arch_tool archive...\n\n");
+
 		if ($arch_tool eq $hom_tool){
 			my ($archive_path) = abs_path($archive);
 			my ($archive_name) = $archive_path =~ /\/(\w+)\/*$/;
 			unless(-d $arch_dir."/".$hom_tool."/".$archive_name){
 				system "cp -r $archive_path $arch_dir/$hom_tool/$archive_name";
 			}
+			else{
+				print("\t$archive already exists in archive location $arch_dir/$hom_tool. Skipping...\n\n");
+			}
 			$archives{$archive_name} = $archive_path;
 		}
 		else{
-			continue;
+			print color 'yellow';
+			print("\t[W]  $archive is a $arch_tool archive and is not compatible with $hom_tool. Skipping...\n\n");
+			print color 'reset';
 		}
 
 	}
+
+	$stop = time();
+
+	print LOG "\tArchive copying completed at ".localtime($start)." (".duration($stop,$start).")\n";
 }
 
 ###################################################################################################
@@ -242,11 +310,19 @@ if(@archives){
 
 ARCHIVE_CREATION:
 if (@predictions){
+
+	$start = time();
+
+	print LOG "\n\t$hom_tool archive creation started at ".localtime($start)."\n";
+	print "\nCreating archives...\n";
 	### Make FOLDSEEK archive from structure sets
 	if (uc($hom_tool) eq "FOLDSEEK"){
+		print "\tCreating archives for FoldSeek...\n";
 		for my $structure_set (@predictions){
 			my ($db_name) = $structure_set =~ /\/(\w+)\/*$/;
+			$archives{$db_name} = $arch_dir."/FOLDSEEK/".$db_name;
 			unless (-d $arch_dir."/FOLDSEEK/".$db_name){	
+				print "\tCreating archive for $db_name...\n";
 				system ("
 					$foldseek_script \\
 					  --create \\
@@ -254,15 +330,20 @@ if (@predictions){
 					  --pdb $structure_set \\
 					  --threads $threads
 				");
-				$archives{$db_name} = $arch_dir."/FOLDSEEK/".$db_name;
+			}
+			else{
+				print "\tArchive for $db_name already exists at $arch_dir/FOLDSEEK/...\n";
 			}
 		}
 	}
 	### Make GESAMT archive from structure sets
 	elsif (uc($hom_tool) eq "GESAMT"){
+		print "\tCreating archives for GESAMT...\n";
 		foreach my $structure_set (@predictions){
 			my ($db_name) = $structure_set =~ /\/(\w+)\/*$/;
+			$archives{$db_name} =  $arch_dir."/GESAMT/".$db_name;
 			unless (-d $arch_dir."/GESAMT/".$db_name){
+				print "\tCreating archive for $db_name...\n";
 				system ("
 					$gesamt_script \\
 					  -cpu $threads \\
@@ -270,7 +351,9 @@ if (@predictions){
 					  -arch $arch_dir/GESAMT/$db_name \\
 					  -pdb $structure_set
 				");
-				$archives{$db_name} =  $arch_dir."/GESAMT/".$db_name;
+			}
+			else{
+				print "\tArchive for $db_name already exists at $arch_dir/GESAMT/...\n";
 			}
 		}
 	}
@@ -286,12 +369,20 @@ if (@predictions){
 			goto ASK;
 		}
 	}
+
+	$stop = time();
+
+	print LOG "\t$hom_tool archive creation completed at ".localtime($stop)." (".duration($stop,$start).")\n";
+
 }
 
 ###################################################################################################
 ## Extract PDB amino acid sequences
 ###################################################################################################
 unless (@prot_fasta){
+	$start = time();
+	print LOG "\n\tProtein sequence extraction started at ".localtime($start)."\n";
+	print "\nExtracting protein sequences from PDB files...\n";
 	foreach my $structure_set (@predictions){
 		system "
 			$extract_script \\
@@ -300,8 +391,11 @@ unless (@prot_fasta){
 		";
 	}
 	system "cat $seq_hom_dir/FASTA/*.faa > $seq_hom_dir/proteins.faa";
+	$stop = time();
+	print LOG "\tProtein sequence extraction completed at ".localtime($stop)." (".duration($stop,$start).")\n";
 }
 else{
+	print LOG "\n\tProtein fastas provided. Skipping extraction...\n";
 	foreach my $fasta (@prot_fasta){
 		system "cat $fasta >> $seq_hom_dir/proteins.faa";
 	}
@@ -311,14 +405,24 @@ else{
 ## Perform sequence homology searches
 ###################################################################################################
 
-system "
-	$seq_hom_script \\
-	  --faa $seq_hom_dir/proteins.faa \\
-	  --uni $fasta_dir \\
-	  --threads $threads \\
-	  --eval $seq_eval \\
-	  --outdir $seq_hom_dir
-";
+unless (-f "$seq_hom_dir/All_sequence_results.tsv"){
+	$start = time();
+	print LOG "\n\tSequence homology searches started at ".localtime($start)."\n";
+	print "\nPerforming sequence homology searches...\n";
+	system "
+		$seq_hom_script \\
+		--faa $seq_hom_dir/proteins.faa \\
+		--uni $fasta_dir \\
+		--threads $threads \\
+		--eval $seq_eval \\
+		--outdir $seq_hom_dir
+	";
+	$stop = time();
+	print LOG "\tSequence homology searches completed at ".localtime($stop)."( ".duration($stop,$start).")\n";
+}
+else{
+	print LOG "\n\tSequence homology searches performed previously. Skipping search...\n";
+}
 
 ###################################################################################################
 ## Perform 3D homology searches
@@ -326,58 +430,80 @@ system "
 
 my @results;
 
-for my $arch (keys(%archives)){
-	my $arch_path = $archives{$arch};
-	if (uc($hom_tool) eq "FOLDSEEK"){
-		system ("
-			$foldseek_script \\
-			  --query \\
-			  --db $arch_path/$arch \\
-			  --input $pdb_dir/*\.pdb* \\
-			  --outdir $struct_res_dir/FOLDSEEK/$arch \\
-			  --gzip
-		");
-
-	}
-	elsif (uc($hom_tool) eq "GESAMT"){
-		system ("
-			$gesamt_script \\
-				--cpu $threads \\
+if (scalar(keys(%archives))>0){
+	$start = time();
+	print LOG "\n\t3D homology searches with $hom_tool started at ".localtime($start)."\n";
+	for my $arch (keys(%archives)){
+		print "\nPerforming 3D homology searches on $arch archive with ";
+		my $arch_path = $archives{$arch};
+		if (uc($hom_tool) eq "FOLDSEEK"){
+			print "FoldSeek...\n";
+			system ("
+				$foldseek_script \\
 				--query \\
-				--arch $arch \\
+				--db $arch_path/$arch \\
 				--input $pdb_dir/*\.pdb* \\
-				--outdir $struct_res_dir/GESAMT/$arch \\
-				--gzip \\
-				-mode normal
-		");
+				--outdir $struct_res_dir/FOLDSEEK/$arch \\
+				--gzip
+			");
+
+		}
+		elsif (uc($hom_tool) eq "GESAMT"){
+			print "GESAMT...\n";
+			system ("
+				$gesamt_script \\
+					--cpu $threads \\
+					--query \\
+					--arch $arch \\
+					--input $pdb_dir/*\.pdb* \\
+					--outdir $struct_res_dir/GESAMT/$arch \\
+					--gzip \\
+					-mode normal
+			");
+		}
 	}
+	$stop = time();
+	print LOG "\t3D homology searches completed at ".localtime($stop)." (".duration($stop,$start).")\n";
 }
 
 if (uc($hom_tool) eq "FOLDSEEK"){
+	$start = time();
+	print LOG "\n\tTMscore calculation started at ".localtime($start)."\n";
+	print "\nCalculating TMscores for FoldSeek results with MICAN...\n";
 	system ("
 		$mican_script \\
 			--results_dir $struct_res_dir \\
 			--uniprot_pdb $pdb_dir \\
 			--predict_dir @predictions
 	");
+	$stop = time();
+	print LOG "\tTMscore calculation completed at ".localtime($stop)." (".duration($stop,$start).")\n";
 }
 
 ###################################################################################################
 ## Parse 3D Homology Results
 ###################################################################################################
 
+$start = time();
+print LOG "\n\tParsing 3D homology results started at ".localtime($start)."\n";
+print "\nParsing 3D homology results...\n";
 system "$parser_script \\
 		--gesamt $struct_res_dir/GESAMT/* \\
-		--foldseek $struct_res_dir/FOLDSEEK/* \\
+		--foldseek $struct_res_dir/FOLDSEEK_w_MICAN/* \\
 		--qscore $qscore \\
-		--eval $fs_eval \\
+		--eval $fs_tm \\
 		--outdir $results_dir
 ";
+$stop = time();
+print LOG "\tParsing 3D homology results completed at ".localtime($stop)."( ".duration($stop,$start).")\n";
 
 ###################################################################################################
-## Add metadata to GESAMT results
+## Compiling results and adding metadata
 ###################################################################################################
 
+$start = time();
+print LOG "\n\tCompiling results started at ".localtime($start)."...\n";
+print "\nCompiling all evidences and adding metadata...\n";
 system "$metadata_script \\
 		  --metadata $uniprot_dir/metadata.log \\
 		  --foldseek $results_dir/FoldSeek_parsed_results.matches \\
@@ -386,3 +512,29 @@ system "$metadata_script \\
 		  --annot $annot_file \\
 		  --outfile $results_dir
 ";
+$stop = time();
+print LOG ("\tResult compilation completed on ".localtime($stop)." (".duration($stop,$start).")\n");
+
+###################################################################################################
+## End of Script
+###################################################################################################
+
+print color 'reset';
+my $master_stop = time();
+print LOG ("\n$0 completed on ".localtime($master_stop)." (".duration($master_stop,$master_start).")\n");
+
+###################################################################################################
+## Subroutines
+
+sub duration {
+	my $elapsed = ($_[0] - $_[1]);
+	my $days = int($elapsed/(24*60*60));
+	my $hours = $elapsed%(24*60*60);
+	$hours = int($hours/(60*60));
+	my $mins = $elapsed%(60*60);
+	$mins = int($mins/60);
+	my $secs = $elapsed%60;
+	$secs = int($secs);
+	my $duration = "Duration: $days days, $hours hours, $mins mins, $secs secs";
+	return $duration;
+}
