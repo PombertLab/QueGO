@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 ## Pombert Lab 2022
 my $name = "run_QueGO.pl";
-my $version = "0.8.0";
+my $version = "0.8.1";
 my $updated = "2022-07-24";
 
 use strict;
@@ -29,6 +29,7 @@ USAGE		$name \\
 ## UNIPROT SCRAPER OPTIONS ##
 -k (--go_keyword)	Search using gene ontolgy keyword
 -v (--verified_only)	Search for genes that have been verified by experimental evidence
+-n (--need_3D)	Require genes to have 3D structure
 -m (--method)		Method used to obtain structure [Default = All] (X-ray, NMR, Predicted)
 -u (--uniprot)		Previously performed UNIPROT_SCRAP_RESULTS
 
@@ -63,6 +64,7 @@ my $stop;
 
 my $go_keyword;
 my $verified_only;
+my $need_3D;
 my @method;
 my $uniprot;
 
@@ -84,10 +86,11 @@ my $custom;
 GetOptions(
 	'k|go_keyword=s' => \$go_keyword,
 	'v|verfied_only' => \$verified_only,
+	'n|need_3D' => \$need_3D,
 	'm|method=s{1,}' => \@method,
 	'u|uniprot=s' => \$uniprot,
 
-	'p|prot_fasta=s{1,}' => \@prot_fasta,
+	'f|fastas=s{1,}' => \@prot_fasta,
 	'e|eval=s' => \$seq_eval,
 
 	's|pred_struct=s{1,}' => \@predictions,
@@ -163,7 +166,7 @@ open LOG, ">", "$outdir/run_QueGO.log";
 print LOG ($0);
 for my $arg (@arguments){
 	if(substr($arg,0,1) eq "-"){
-		print LOG (" \\\n$arg");
+		print LOG (" \\\n  $arg");
 	}
 	else{
 		print LOG (" $arg")
@@ -197,16 +200,19 @@ unless (-f "$uniprot_dir/metadata.log"){
 	elsif($go_keyword){
 		$start = time();
 		print LOG "\n\tUniProt scrap started at ".localtime($start)."\n";
-		print "Starting UniProt scrap...\n\n";
+		print "\nStarting UniProt scrap...\n\n";
 		my $flags = "";
 		
 		if($go_keyword){
 			$flags .= "--go_keyword $go_keyword ";
 		}
 
-
 		if(@method){
 			$flags .= "--method @method ";
+		}
+
+		if($need_3D){
+			$flags .= "--structures ";
 		}
 
 		if($verified_only){
@@ -221,7 +227,6 @@ unless (-f "$uniprot_dir/metadata.log"){
 				--outdir $outdir/UNIPROT_SCRAP_RESULTS \\
 				-df \\
 				-ds \\
-				-s \\
 				$flags
 		";
 
@@ -243,7 +248,7 @@ unless (-f "$uniprot_dir/metadata.log"){
 }
 else{
 	print color 'yellow';
-	print "Previous UniProt scrap found at $uniprot_dir. Utilizing previous results...\n";
+	print "\nPrevious UniProt scrap found at $uniprot_dir. Utilizing previous results...\n";
 	print color 'reset';
 }
 
@@ -488,10 +493,10 @@ $start = time();
 print LOG "\n\tParsing 3D homology results started at ".localtime($start)."\n";
 print "\nParsing 3D homology results...\n";
 system "$parser_script \\
-		--gesamt $struct_res_dir/GESAMT/* \\
-		--foldseek $struct_res_dir/FOLDSEEK_w_MICAN/* \\
+		--gesamt $struct_res_dir/GESAMT \\
+		--foldseek $struct_res_dir/FOLDSEEK_w_MICAN \\
 		--qscore $qscore \\
-		--eval $fs_tm \\
+		--tm $fs_tm \\
 		--outdir $results_dir
 ";
 $stop = time();
