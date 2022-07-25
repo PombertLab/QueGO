@@ -2,8 +2,8 @@
 ## Pombert Lab 2022
 
 my $name = "run_MICAN.pl";
-my $version = "0.1.1";
-my $updated = "2022-07-23";
+my $version = "0.1.2";
+my $updated = "2022-07-24";
 
 use strict;
 use warnings;
@@ -50,7 +50,7 @@ unless (-d "temp"){
 
 opendir(ODIR,$results_dir) or die "Cannot access $results_dir: $!\n";
 while (my $hom_tool_dir = readdir(ODIR)){
-	if ((-d $results_dir."/".$hom_tool_dir) && ($hom_tool_dir !~ /^\./)){
+	if ((-d $results_dir."/".$hom_tool_dir) && ($hom_tool_dir eq "FOLDSEEK")){
 		opendir(MDIR,$results_dir."/".$hom_tool_dir) or die "Cannot access $results_dir/$hom_tool_dir: $!\n";;
 		while (my $structure_set_dir = readdir(MDIR)){
 			if ((-d $results_dir."/".$hom_tool_dir."/".$structure_set_dir) && ($structure_set_dir !~ /^\./)){
@@ -68,10 +68,10 @@ while (my $hom_tool_dir = readdir(ODIR)){
 						my ($outfile) = $file =~ /^(\w+)/;
 						$file_counter++;
 
-						my $done = int(($file_counter/$file_count)*100);
+						my $done = int(($file_counter/($file_count-3))*100);
 						my $remaining = 100-$done;
 
-						my $bar = "\t[".("|"x$done).("."x$remaining)."]\t($file_counter/$file_count)\n";
+						my $bar = "\t[".("|"x$done).("."x$remaining)."]\t($file_counter/".($file_count-3).")\n";
 
 						print($bar."Working on $outfile...\n");
 
