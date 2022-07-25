@@ -1,8 +1,8 @@
 #!/usr/bin/python
 
 name = "uniprot_scraper.py"
-version = "1.5.2"
-updated = "2022-07-03"
+version = "1.5.3"
+updated = "2022-07-25"
 
 usage = f"""\n
 NAME		{name}
@@ -316,45 +316,6 @@ for accession,page in accession_numbers:
 
 	## Jump to Structure section to get metadata
 	driver.get(f"{page}#structure")
-	
-	## Get feature results
-	attributes = False
-	while True:
-		sleep(1)
-		try:
-			structure_card = driver.find_element_by_id("structure")
-			structure_display = structure_card.find_element_by_class_name("card__content")
-			headers = [i.text for i in structure_display.find_elements_by_css_selector("h3")]
-			if "Features" in headers:
-				attributes = True
-			break
-		except:
-			next
-
-	META.write(f"\tFEATURES\n")
-	if attributes:
-
-		struct_atts = {}
-
-		feature_table = structure_display.find_elements_by_css_selector("protvista-datatable")[-1]
-		table_object = feature_table.find_element_by_css_selector("table > tbody")
-		feature_results = table_object.find_elements_by_css_selector("tr")
-		
-		for result in feature_results:
-			if "hidden" not in result.get_attribute("class"):
-				feat = result.find_element_by_css_selector("td:nth-child(2)").text
-				if feat not in struct_atts.keys():
-					struct_atts[feat] = 0
-				struct_atts[feat] += 1
-		
-		for key in sorted(struct_atts.keys()):
-			META.write(f"\t\t{key.upper()}:{struct_atts[key]}\n")
-		
-		scrap_results[accession][1] = struct_atts
-
-	else:
-		META.write(f"\t\tN\A\n")
-
 
 	## Get structure results
 	results = False
@@ -378,12 +339,55 @@ for accession,page in accession_numbers:
 			break
 		except:
 			next
+	
+	## Get feature results
+	attributes = False
+	while True:
+		sleep(1)
+		try:
+			structure_card = driver.find_element_by_id("structure")
+			structure_display = structure_card.find_element_by_class_name("card__content")
+			headers = [i.text for i in structure_display.find_elements_by_css_selector("h3")]
+			if "Features" in headers:
+				attributes = True
+			break
+		except:
+			next
+
+	META.write(f"\tFEATURES\n")
+	
+	struct_atts = {}
+	
+	if attributes:
+
+		feature_table = structure_display.find_elements_by_css_selector("protvista-datatable")[-1]
+		table_object = feature_table.find_element_by_css_selector("table > tbody")
+		feature_results = table_object.find_elements_by_css_selector("tr")
+		
+		for result in feature_results:
+			if "hidden" not in result.get_attribute("class"):
+				feat = result.find_element_by_css_selector("td:nth-child(2)").text
+				if feat not in struct_atts.keys():
+					struct_atts[feat] = 0
+				struct_atts[feat] += 1
+		
+		for key in sorted(struct_atts.keys()):
+			META.write(f"\t\t{key.upper()}:{struct_atts[key]}\n")
+		
+		scrap_results[accession][1] = struct_atts
+
+	else:
+		if results:
+			META.write(f"\t\tN\A\n")
+		else:
+			META.write(f"\t\tNo Structure Available\n")
 
 	META.write(f"\tSTRUCTURES\n")
+
+	structure_data = []
+
 	if results:
 
-		structure_data = []
-		
 		for result in results:
 
 			## Get the structure type
@@ -411,6 +415,7 @@ for accession,page in accession_numbers:
 		scrap_results[accession][2] = structure_data
 
 	else:
+
 		META.write(f"\t\tNONE\n")
 
 print()
