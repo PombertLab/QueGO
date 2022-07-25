@@ -2,8 +2,8 @@
 ## Pombert Lab 2022
 
 my $name = "parse_3D_homology_results.pl";
-my $version = "0.2.1";
-my $updated = "2022-07-22";
+my $version = "0.2.2";
+my $updated = "2022-07-24";
 
 use strict;
 use warnings;
@@ -41,10 +41,10 @@ my $all;
 my $outdir = "3D_homology_results_parsed";
 
 GetOptions(
-	'g|gesamt=s{1,}' => \@{$result_dirs{"GESAMT"}},
-	'f|foldseek=s{1,}' => \@{$result_dirs{"FoldSeek"}},
+	'g|gesamt=s{1,}' => \$result_dirs{"GESAMT"},
+	'f|foldseek=s{1,}' => \$result_dirs{"FoldSeek"},
 	'q|qscore=s' => \$qscore_cut,
-	'e|eval=s' => \$tm_cut,
+	't|tm=s' => \$tm_cut,
 	'b|best=s' => \$best,
 	'a|all' => \$all,
 	'o|outdir=s' => \$outdir,
@@ -57,87 +57,96 @@ unless(-d $outdir){
 my %results;
 foreach my $predictor (keys(%result_dirs)){
 	if ($predictor eq "GESAMT"){
-		foreach my $directory (@{$result_dirs{$predictor}}){
-			if (-d $directory){
-				opendir(DIR,$directory);
-				my @source = split(/\//,$directory);
-				my $pred_struct_source = $source[-1];
+		if (-d $result_dirs{$predictor}){
+			opendir(ODOR,$result_dirs{$predictor}) or die "Unable to access $result_dirs{$predictor}: $!";
+			foreach my $directory (readdir(ODIR)){
+				if (-d $result_dirs{$predictor}."/".$directory && $directory !~ /^\./){
+					opendir(DIR,$result_dirs{$predictor}."/".$directory);
+					my @source = split(/\//,$directory);
+					my $pred_struct_source = $source[-1];
 
-				while(my $file = readdir(DIR)){
-					
-					unless(-d $file){
+					while(my $file = readdir(DIR)){
+						
+						unless(-d $result_dirs{$predictor}."/".$directory."/".$file){
 
-						my $query_struct;
-						my $gzip;
+							my $query_struct;
+							my $gzip="";
 
-						if ($file =~ /(\w+).normal.gesamt.gz$/){
-							$query_struct = $1;
-							$gzip = ":gzip";
-						}
-						elsif ($file =~ /(\w+).normal.gesamt$/){
-							$query_struct = $1;
-						}
+							if ($file =~ /(\w+).normal.gesamt.gz$/){
+								$query_struct = $1;
+								$gzip = ":gzip";
+							}
+							elsif ($file =~ /(\w+).normal.gesamt$/){
+								$query_struct = $1;
+							}
 
-						open IN, "<", "$directory/$file";
-						while(my $line = <IN>){
-							chomp($line);
-							unless(($line =~ /^\#/)||($line eq '')){
-								# print($line."\n");
-								my @data = split('\s+',$line);
+							open IN, "<", $result_dirs{$predictor}."/".$directory."/".$file;
+							while(my $line = <IN>){
+								chomp($line);
+								unless(($line =~ /^\#/)||($line eq '')){
+									# print($line."\n");
+									my @data = split('\s+',$line);
 
-								my ($qscore,$rmsd,$seq_id,$n_align,$nRes,$predicted_file) = @data[($#data-5)..$#data];
+									my ($qscore,$rmsd,$seq_id,$n_align,$nRes,$predicted_file) = @data[($#data-5)..$#data];
 
-								my ($predicted_structure) = $predicted_file =~ /^(\w+)/;
-								if($qscore >= $qscore_cut){
-									push(@{$results{$predictor}{$query_struct}{$predicted_structure}},($pred_struct_source,$qscore,$rmsd,$seq_id,$n_align,$nRes));
+									my ($predicted_structure) = $predicted_file =~ /^(\w+)/;
+									if($qscore >= $qscore_cut){
+										push(@{$results{$predictor}{$query_struct}{$predicted_structure}},($pred_struct_source,$qscore,$rmsd,$seq_id,$n_align,$nRes));
+									}
 								}
 							}
 						}
 					}
 				}
 			}
+			close ODIR;
 		}
 	}
 	elsif($predictor eq "FoldSeek"){
-		foreach my $directory (@{$result_dirs{$predictor}}){
-			if (-d $directory){
-				opendir(DIR,$directory);
-				my @source = split(/\//,$directory);
-				my $pred_struct_source = $source[-1];
-				while(my $file = readdir(DIR)){
-					unless(-d $file || ($file eq "error.log")){
+		if (-d $result_dirs{$predictor}){
+			opendir(ODIR,$result_dirs{$predictor}) or die "Unable to access directory $result_dirs{$predictor}: $!\n";
+			foreach my $directory (readdir(ODIR)){
+				if ((-d $result_dirs{$predictor}."/".$directory) && ($directory !~ /^\./)){
+					opendir(DIR,$result_dirs{$predictor}."/".$directory);
+					my @source = split(/\//,$directory);
+					my $pred_struct_source = $source[-1];
+					while(my $file = readdir(DIR)){
+						unless(-d $result_dirs{$predictor}."/".$directory."/".$file || ($file eq "error.log")){
+							my $query_struct;
+							my $gzip="";
 
-						my $query_struct;
-						my $gzip;
+							if ($file =~ /(\w+)_w_tmscore.fseek.gz$/){
+								$query_struct = $1;
+								$gzip = ":gzip";
+							}
+							elsif ($file =~ /(\w+)_w_tmscore.fseek$/){
+								$query_struct = $1;
+							}
 
-						if ($file =~ /(\w+)_w_MICAN.fseek.gz$/){
-							$query_struct = $1;
-							$gzip = ":gzip";
-						}
-						elsif ($file =~ /(\w+)_w_MICAN.fseek$/){
-							$query_struct = $1;
-						}
-
-						open IN, "<$gzip", "$directory/$file";
-						while(my $line = <IN>){
-							chomp($line);
-							unless(($line =~ /^\#/)||($line eq '')){
-								my @data = split('\s+',$line);
-								my ($predicted_structure) = $data[1] =~ /^(\w+)/;
-								if ($data[12] <= $tm_cut){
-									push(@{$results{$predictor}{$query_struct}{$predicted_structure}},($pred_struct_source,@data[2..12]));
+							open IN, "<$gzip", $result_dirs{$predictor}."/".$directory."/".$file or die "Unable to open $result_dirs{$predictor}/$directory/$file: $!";
+							while(my $line = <IN>){
+								chomp($line);
+								unless(($line =~ /^\#/)||($line eq '')){
+									my @data = split('\s+',$line);
+									my ($predicted_structure) = $data[1] =~ /^(\w+)/;
+									if ($data[$#data] >= $tm_cut){
+										push(@{$results{$predictor}{$query_struct}{$predicted_structure}},($pred_struct_source,@data[2..12]));
+									}
 								}
 							}
 						}
 					}
 				}
 			}
+			close ODOR;
 		}
 	}
 }
 
 foreach my $predictor (keys(%results)){
-	open ALL, ">", "$outdir/${predictor}_parsed_results.matches";
+	print($predictor."\n");
+	open ALL, ">", "$outdir/${predictor}_parsed_results.matches" or die "Unable to write to $outdir/${predictor}_parsed_results.matches: $!";
+	print "$outdir/${predictor}_parsed_results.matches\n";
 	if ($predictor eq "GESAMT"){
 		print ALL ("### Locus\tSource\tQ-Score\tr.m.s.d\tSeq. Id.\tNalign\tnRes\n\n");
 		foreach my $query_struct (sort(keys(%{$results{$predictor}}))){
