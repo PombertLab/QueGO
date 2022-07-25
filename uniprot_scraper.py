@@ -1,7 +1,7 @@
 #!/usr/bin/python
 
 name = "uniprot_scraper.py"
-version = "1.5.3"
+version = "1.5.4"
 updated = "2022-07-25"
 
 usage = f"""\n
@@ -377,10 +377,10 @@ for accession,page in accession_numbers:
 		scrap_results[accession][1] = struct_atts
 
 	else:
-		if results:
+		if len(results) > 1:
 			META.write(f"\t\tN\A\n")
 		else:
-			META.write(f"\t\tNo Structure Available\n")
+			META.write(f"\t\tOnly Predicted Structure Available\n")
 
 	META.write(f"\tSTRUCTURES\n")
 
@@ -410,7 +410,8 @@ for accession,page in accession_numbers:
 
 			## Get the PDB
 			structure_data.append([pdb,chain,method,download_link])
-			META.write(f"\t\t{pdb}\t{chain}\t{method}\t{download_link}\n")
+			if method in methods:
+				META.write(f"\t\t{pdb}\t{chain}\t{method}\t{download_link}\n")
 		
 		scrap_results[accession][2] = structure_data
 
