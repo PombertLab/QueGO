@@ -2,8 +2,8 @@
 ## Pombert Lab 2022
 
 my $name = 'organize_results.pl';
-my $version = '1.6.5';
-my $updated = '2022-07-23';
+my $version = '1.6.6';
+my $updated = '2022-07-25';
 
 use strict;
 use warnings;
@@ -206,7 +206,12 @@ if ($seqnc_file){
 				@{$seq_results{$prot_name}{$locus}} = @data;
 
 				## Add the eval to score keeper
-				$all_results{$prot_name}{$locus}{"SCORE"} = (-log($data[9])/40)
+				if($data[9] == 0){
+					$all_results{$prot_name}{$locus}{"SCORE"} = 1;
+				}
+				else{
+					$all_results{$prot_name}{$locus}{"SCORE"} = (-log($data[9])/325);
+				}
 			}
 		}
 	}
