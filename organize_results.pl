@@ -2,7 +2,7 @@
 ## Pombert Lab 2022
 
 my $name = 'organize_results.pl';
-my $version = '1.6.6';
+my $version = '1.6.7';
 my $updated = '2022-07-25';
 
 use strict;
@@ -109,9 +109,7 @@ while (my $line = <META>){
 					push(@{$metadata{$accession}[3]},$1);
 				}
 				else{
-					if (join(";",@{$metadata{$accession}[3]}) ne "N\\A"){
-						$features{$metadata{$accession}[0]} = join(";",@{$metadata{$accession}[3]});
-					}
+					$features{$metadata{$accession}[0]} = join(";",@{$metadata{$accession}[3]});
 					goto START;
 				}
 			}
