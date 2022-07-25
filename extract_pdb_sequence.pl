@@ -2,8 +2,8 @@
 ## Pombert Lab
 
 my $name = 'extract_pdb_sequence.pl';
-my $version = '0.1.1';
-my $updated = '2022-07-22';
+my $version = '0.1.2';
+my $updated = '2022-07-24';
 
 use strict;
 use warnings;
@@ -46,34 +46,36 @@ initialize();
 
 foreach my $file (@pdbs){
 
-	my $gzip = "";
-	if ($file =~ /\.gz$/){
-		$gzip = ":gzip";
-	}
-
-	open IN, "<$gzip", $file or die("Unable to read from $file: $!\n");
-
-	my $fasta = "";
-
-	while (my $line = <IN>){
-		chomp($line);
-		if($line =~ /^ATOM.{9}CA\s{2}(\w{3})/){
-			$fasta .= $AAs{$1};
+	unless (-f "$outdir/$filename.faa"){
+		my $gzip = "";
+		if ($file =~ /\.gz$/){
+			$gzip = ":gzip";
 		}
-	}
 
-	close IN;
+		open IN, "<$gzip", $file or die("Unable to read from $file: $!\n");
 
-	my @fasta = unpack("(A60)*",$fasta);
-	
-	my ($filename) = $file =~ /(\w+)(?:\-\w+)?(?:\.\w+)$/;
-	
-	open OUT, ">", "$outdir/$filename.faa" or die("Unable to write to $file: $!\n");
-	
-	print OUT ">$filename\n";
-	
-	while (my $line = shift(@fasta)){
-		print OUT $line."\n";
+		my $fasta = "";
+
+		while (my $line = <IN>){
+			chomp($line);
+			if($line =~ /^ATOM.{9}CA\s{2}(\w{3})/){
+				$fasta .= $AAs{$1};
+			}
+		}
+
+		close IN;
+
+		my @fasta = unpack("(A60)*",$fasta);
+		
+		my ($filename) = $file =~ /(\w+)(?:\-\w+)?(?:\.\w+)$/;
+		
+		open OUT, ">", "$outdir/$filename.faa" or die("Unable to write to $file: $!\n");
+		
+		print OUT ">$filename\n";
+		
+		while (my $line = shift(@fasta)){
+			print OUT $line."\n";
+		}
 	}
 }
 
