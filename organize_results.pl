@@ -2,8 +2,8 @@
 ## Pombert Lab 2022
 
 my $name = 'organize_results.pl';
-my $version = '1.6.7';
-my $updated = '2022-07-25';
+my $version = '1.6.8';
+my $updated = '2022-07-27';
 
 use strict;
 use warnings;
@@ -86,6 +86,7 @@ while (my $line = <META>){
 			$line = <META>;
 			chomp ($line);
 			my ($prot_name) = $line =~ /\t\t(.*)/;
+			$prot_name = uc($prot_name);
 			$metadata{$accession}[0] = $prot_name;
 			$proteins{$prot_name} = 1;
 		}
@@ -109,7 +110,14 @@ while (my $line = <META>){
 					push(@{$metadata{$accession}[3]},$1);
 				}
 				else{
-					$features{$metadata{$accession}[0]} = join(";",@{$metadata{$accession}[3]});
+					if ($features{$metadata{$accession}[0]}){
+						if ($features{$metadata{$accession}[0]} eq "None Available"){
+							$features{$metadata{$accession}[0]} = join(";",@{$metadata{$accession}[3]});
+						}
+					}
+					else{
+						$features{$metadata{$accession}[0]} = join(";",@{$metadata{$accession}[3]});
+					}
 					goto START;
 				}
 			}
@@ -187,7 +195,7 @@ if ($seqnc_file){
 			else{
 
 				## Data is going to be sorted by protein name to reduce entries; get it from metadata using accession
-				my $prot_name = $metadata{$accession}[0];
+				my $prot_name = uc($metadata{$accession}[0]);
 				
 				## Convert line to array
 				my @data = split("\t",$line);
@@ -365,7 +373,11 @@ print OUT "### LOCUS\tANNOTATION\tSEQ_HOM_EVALUE\tSEQ_FASTA\tFOLDSEEK_TMSCORE\tF
 
 foreach my $prot (sort(keys(%proteins))){
 
+	print "HERE: $prot\n";
+
 	if ($all_results{$prot}){
+
+		print "HERE2: $prot\n";
 		
 		print OUT "## $prot\t(3D Features:";
 		
@@ -396,11 +408,9 @@ foreach my $prot (sort(keys(%proteins))){
 				my ($seq_gapopen, $seq_qstart, $seq_qend, $seq_sstart) = @seq_data[4..8];
 				my ($seq_send, $seq_eval, $seq_bitscore) = @seq_data[8..10];
 				my $seq_org = $metadata{$seq_accession}[1];
-				# print OUT "\t".$seq_eval."\t".$seq_accession."\t(".$loci_record{"seq"}{$locus}."/".$loci_count{"seq"}{$locus}.")";
 				print OUT "\t".$seq_eval."\t".$seq_accession;
 			}
 			else{
-				# print OUT "\t-"x3;
 				print OUT "\t-"x2;
 			}
 
@@ -409,7 +419,6 @@ foreach my $prot (sort(keys(%proteins))){
 				my @stc_data = @{$all_results{$prot}{$locus}{"FOLDSEEK"}};
 				my ($stc_accession, $stc_pdb, $stc_source) = @stc_data[0..2];
 				my ($tmscore) = $stc_data[13];
-				# print OUT "\t".$qscore."\t".$stc_pdb."\t".$stc_source."\t(".$loci_record{"stc"}{$locus}."/".$loci_count{"stc"}{$locus}.")";
 				print OUT "\t".$tmscore."\t".$stc_pdb."\t".$stc_source;
 			}
 			else{
@@ -420,7 +429,6 @@ foreach my $prot (sort(keys(%proteins))){
 				$loci_record{"stc"}{$locus}++;
 				my @stc_data = @{$all_results{$prot}{$locus}{"GESAMT"}};
 				my ($stc_accession, $stc_pdb, $stc_source, $qscore) = @stc_data[0..3];
-				# print OUT "\t".$qscore."\t".$stc_pdb."\t".$stc_source."\t(".$loci_record{"stc"}{$locus}."/".$loci_count{"stc"}{$locus}.")";
 				print OUT "\t".$qscore."\t".$stc_pdb."\t".$stc_source;
 			}
 			else{
