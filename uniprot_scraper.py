@@ -377,13 +377,8 @@ for accession,page in accession_numbers:
 		scrap_results[accession][1] = struct_atts
 
 	else:
-		if (results):
-			if len(results) > 1:
-				META.write(f"\t\tN\A\n")
-			else:
-				META.write(f"\t\tOnly Predicted Structure Available\n")
-		else:
-			META.write(f"\t\tNo Structure Available\n")
+		
+		META.write(f"\t\tNone Available\n")
 
 	META.write(f"\tSTRUCTURES\n")
 
