@@ -373,11 +373,7 @@ print OUT "### LOCUS\tANNOTATION\tSEQ_HOM_EVALUE\tSEQ_FASTA\tFOLDSEEK_TMSCORE\tF
 
 foreach my $prot (sort(keys(%proteins))){
 
-	print "HERE: $prot\n";
-
 	if ($all_results{$prot}){
-
-		print "HERE2: $prot\n";
 		
 		print OUT "## $prot\t(3D Features:";
 		
