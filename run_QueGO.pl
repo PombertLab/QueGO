@@ -1,8 +1,8 @@
 #!/usr/bin/perl
 ## Pombert Lab 2022
 my $name = "run_QueGO.pl";
-my $version = "0.8.1";
-my $updated = "2022-07-24";
+my $version = "0.8.4";
+my $updated = "2022-08-23";
 
 use strict;
 use warnings;
@@ -154,7 +154,9 @@ foreach my $dir (@dirs){
 		make_path($dir,{mode => 0755});
 	}
 	else{
+		print color 'yellow';
 		print "\tDirectory $dir already exists...\n";
+		print color 'reset';
 	}
 }
 
@@ -162,8 +164,8 @@ foreach my $dir (@dirs){
 ## Setting up log file
 ###################################################################################################
 
-open LOG, ">", "$outdir/run_QueGO.log";
-print LOG ($0);
+open LOG, ">>", "$outdir/run_QueGO.log";
+print LOG ("\n".$0);
 for my $arg (@arguments){
 	if(substr($arg,0,1) eq "-"){
 		print LOG (" \\\n  $arg");
@@ -178,78 +180,72 @@ print LOG ("\n\n");
 ## Getting UniProt data either from new WebScrap or old archive
 ###################################################################################################
 
-unless (-f "$uniprot_dir/metadata.log"){
-	### Use previously used scrap results
-	if ($uniprot){
-		if (-d "$uniprot"){
-			$start = time();
-			print LOG "\n\tCopying UniProt scrap started at ".localtime($start)."\n";
-			print "Utilizing previous UniProt scrap located at $uniprot...\n\n";
-			system "cp -r $uniprot/* $uniprot_dir/";
-			$stop = time();
-			print LOG "\tUniProt scrap copying completed at ".localtime($stop)." (".duration($stop,$start).")\n";
-		}
-		else {
-			print color 'red';
-			print "\n\n[E]  Could not access previous UniProt scrap located at $uniprot...\n\n";
-			print color 'reset';
-			exit;
-		}
-	}
-	### Perform UniProt scraping
-	elsif($go_keyword){
+### Use previously used scrap results
+if ($uniprot){
+	if (-d "$uniprot"){
 		$start = time();
-		print LOG "\n\tUniProt scrap started at ".localtime($start)."\n";
-		print "\nStarting UniProt scrap...\n\n";
-		my $flags = "";
-		
-		if($go_keyword){
-			$flags .= "--go_keyword $go_keyword ";
-		}
-
-		if(@method){
-			$flags .= "--method @method ";
-		}
-
-		if($need_3D){
-			$flags .= "--structures ";
-		}
-
-		if($verified_only){
-			$flags .= "-v";
-		}
-
-		if($custom){
-			$flags = "-c '$custom'";
-		}
-
-		system "$scraper_script \\
-				--outdir $outdir/UNIPROT_SCRAP_RESULTS \\
-				-df \\
-				-ds \\
-				$flags
-		";
-
-		unless(-f "$uniprot_dir/metadata.log"){
-			print color 'red';
-			print "\n\n[E]  UniProt scraping failed\n\n";
-			print color 'reset';
-			exit;
-		}
+		print LOG "\n\tCopying UniProt scrap started at ".localtime($start)."\n";
+		print "Utilizing previous UniProt scrap located at $uniprot...\n\n";
+		system "cp -r $uniprot/* $uniprot_dir/";
 		$stop = time();
-		print LOG "\tUniProt scrap completed at ".localtime($stop)." (".duration($stop,$start).")\n";
+		print LOG "\tUniProt scrap copying completed at ".localtime($stop)." (".duration($stop,$start).")\n";
 	}
-	else{
+	else {
 		print color 'red';
-		print "\n\n[E]  Please provide a GO keyword or UNIPROT_SCRAP_RESULTS directory...\n\n";
+		print "\n\n[E]  Could not access previous UniProt scrap located at $uniprot...\n\n";
 		print color 'reset';
 		exit;
 	}
 }
+### Perform UniProt scraping
+elsif($go_keyword){
+	$start = time();
+	print LOG "\n\tUniProt scrap started at ".localtime($start)."\n";
+	print "\nStarting UniProt scrap...\n\n";
+	my $flags = "";
+	
+	if($go_keyword){
+		$go_keyword =~ s/"//g;
+		$flags .= "--go_keyword \"$go_keyword\" ";
+	}
+
+	if(@method){
+		$flags .= "--method @method ";
+	}
+
+	if($need_3D){
+		$flags .= "--structures ";
+	}
+
+	if($verified_only){
+		$flags .= "-v";
+	}
+
+	if($custom){
+		$flags = "-c '$custom'";
+	}
+
+	system "$scraper_script \\
+			--outdir $outdir/UNIPROT_SCRAP_RESULTS \\
+			-df \\
+			-ds \\
+			$flags
+	";
+
+	unless(-f "$uniprot_dir/metadata.log"){
+		print color 'red';
+		print "\n\n[E]  UniProt scraping failed\n\n";
+		print color 'reset';
+		exit;
+	}
+	$stop = time();
+	print LOG "\tUniProt scrap completed at ".localtime($stop)." (".duration($stop,$start).")\n";
+}
 else{
-	print color 'yellow';
-	print "\nPrevious UniProt scrap found at $uniprot_dir. Utilizing previous results...\n";
+	print color 'red';
+	print "\n\n[E]  Please provide a GO keyword or UNIPROT_SCRAP_RESULTS directory...\n\n";
 	print color 'reset';
+	exit;
 }
 
 my %archives;
