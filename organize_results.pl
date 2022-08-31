@@ -2,8 +2,8 @@
 ## Pombert Lab 2022
 
 my $name = 'organize_results.pl';
-my $version = '1.6.8';
-my $updated = '2022-07-27';
+my $version = '1.7.0';
+my $updated = '2022-08-31';
 
 use strict;
 use warnings;
