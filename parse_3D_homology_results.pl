@@ -2,8 +2,8 @@
 ## Pombert Lab 2022
 
 my $name = "parse_3D_homology_results.pl";
-my $version = "0.2.2";
-my $updated = "2022-07-24";
+my $version = "0.2.3";
+my $updated = "2022-08-31";
 
 use strict;
 use warnings;
@@ -56,7 +56,7 @@ unless(-d $outdir){
 
 my %results;
 foreach my $predictor (keys(%result_dirs)){
-	if ($predictor eq "GESAMT"){
+	if (($predictor eq "GESAMT") && ($result_dirs{$predictor})){
 		if (-d $result_dirs{$predictor}){
 			opendir(ODOR,$result_dirs{$predictor}) or die "Unable to access $result_dirs{$predictor}: $!";
 			foreach my $directory (readdir(ODIR)){
@@ -89,9 +89,9 @@ foreach my $predictor (keys(%result_dirs)){
 
 									my ($qscore,$rmsd,$seq_id,$n_align,$nRes,$predicted_file) = @data[($#data-5)..$#data];
 
-									my ($predicted_structure) = $predicted_file =~ /^(\w+)/;
+									my ($predicted_structure,$model_number) = $predicted_file =~ /^(\w+)(?:-(m\d+))*(?:-\w+)*\.pdb(?:\.gz)*$/;
 									if($qscore >= $qscore_cut){
-										push(@{$results{$predictor}{$query_struct}{$predicted_structure}},($pred_struct_source,$qscore,$rmsd,$seq_id,$n_align,$nRes));
+										push(@{$results{$predictor}{$query_struct}{$predicted_structure}},($model_number,$pred_struct_source,$qscore,$rmsd,$seq_id,$n_align,$nRes));
 									}
 								}
 							}
@@ -102,7 +102,7 @@ foreach my $predictor (keys(%result_dirs)){
 			close ODIR;
 		}
 	}
-	elsif($predictor eq "FoldSeek"){
+	elsif(($predictor eq "FoldSeek") && ($result_dirs{$predictor})){
 		if (-d $result_dirs{$predictor}){
 			opendir(ODIR,$result_dirs{$predictor}) or die "Unable to access directory $result_dirs{$predictor}: $!\n";
 			foreach my $directory (readdir(ODIR)){
@@ -128,9 +128,9 @@ foreach my $predictor (keys(%result_dirs)){
 								chomp($line);
 								unless(($line =~ /^\#/)||($line eq '')){
 									my @data = split('\s+',$line);
-									my ($predicted_structure) = $data[1] =~ /^(\w+)/;
+									my ($predicted_structure,$model_number) = $data[1] =~ /^(\w+)(?:-(m\d+))*(?:-\w+)*\.pdb(?:\.gz)*$/;
 									if ($data[$#data] >= $tm_cut){
-										push(@{$results{$predictor}{$query_struct}{$predicted_structure}},($pred_struct_source,@data[2..12]));
+										push(@{$results{$predictor}{$query_struct}{$predicted_structure}},($model_number,$pred_struct_source,@data[2..12]));
 									}
 								}
 							}
@@ -148,17 +148,20 @@ foreach my $predictor (keys(%results)){
 	open ALL, ">", "$outdir/${predictor}_parsed_results.matches" or die "Unable to write to $outdir/${predictor}_parsed_results.matches: $!";
 	print "$outdir/${predictor}_parsed_results.matches\n";
 	if ($predictor eq "GESAMT"){
-		print ALL ("### Locus\tSource\tQ-Score\tr.m.s.d\tSeq. Id.\tNalign\tnRes\n\n");
+		print ALL ("### Locus\tModel #\tSource\tQ-Score\tr.m.s.d\tSeq. Id.\tNalign\tnRes\n\n");
 		foreach my $query_struct (sort(keys(%{$results{$predictor}}))){
 			print ALL ("## $query_struct\n");
 			my $query_count = 0;
 			foreach my $predicted_structure (sort{$results{$predictor}{$query_struct}{$b}[1] <=> $results{$predictor}{$query_struct}{$a}[1]}(keys(%{$results{$predictor}{$query_struct}}))){
-				my ($pred_struct_source,$qscore,$rmsd,$seq_id,$n_align,$nRes) = @{$results{$predictor}{$query_struct}{$predicted_structure}};
+				my ($model_number,$pred_struct_source,$qscore,$rmsd,$seq_id,$n_align,$nRes) = @{$results{$predictor}{$query_struct}{$predicted_structure}};
+				unless($model_number){
+					$model_number = '-';
+				}
 				if($all){
-					print ALL ("$predicted_structure\t$pred_struct_source\t$qscore\t$rmsd\t$seq_id\t$n_align\t$nRes\n");
+					print ALL ("$predicted_structure\t$model_number\t$pred_struct_source\t$qscore\t$rmsd\t$seq_id\t$n_align\t$nRes\n");
 				}
 				elsif($query_count < $best){
-					print ALL ("$predicted_structure\t$pred_struct_source\t$qscore\t$rmsd\t$seq_id\t$n_align\t$nRes\n");
+					print ALL ("$predicted_structure\t$model_number\t$pred_struct_source\t$qscore\t$rmsd\t$seq_id\t$n_align\t$nRes\n");
 				}
 				$query_count++;
 			}
@@ -166,17 +169,20 @@ foreach my $predictor (keys(%results)){
 		}
 	}
 	elsif($predictor eq "FoldSeek"){
-		print ALL ("### Locus\tSource\tfident\talnlen\tmismatch.\tgapopen\tqstart\tqend\ttstart\ttend\teval\tbits\ttmscore\n\n");
+		print ALL ("### Locus\tModel #\tSource\tfident\talnlen\tmismatch.\tgapopen\tqstart\tqend\ttstart\ttend\teval\tbits\ttmscore\n\n");
 		foreach my $query_struct (sort(keys(%{$results{$predictor}}))){
 			print ALL ("## $query_struct\n");
 			my $query_count = 0;
 			foreach my $predicted_structure (sort{$results{$predictor}{$query_struct}{$b}[11] <=> $results{$predictor}{$query_struct}{$a}[11]}(keys(%{$results{$predictor}{$query_struct}}))){
-				my ($pred_struct_source,$fident,$alnlen,$mismatch,$gapopen,$qstart,$qend,$tstart,$tend,$eval,$bits,$tmscore) = @{$results{$predictor}{$query_struct}{$predicted_structure}};
+				my ($model_number,$pred_struct_source,$fident,$alnlen,$mismatch,$gapopen,$qstart,$qend,$tstart,$tend,$eval,$bits,$tmscore) = @{$results{$predictor}{$query_struct}{$predicted_structure}};
+				unless($model_number){
+					$model_number = '-';
+				}
 				if($all){
-					print ALL ("$predicted_structure\t$pred_struct_source\t$fident\t$alnlen\t$mismatch\t$gapopen\t$qstart\t$qend\t$tstart\t$tend\t$eval\t$bits\t$tmscore\n");
+					print ALL ("$predicted_structure\t$model_number\t$pred_struct_source\t$fident\t$alnlen\t$mismatch\t$gapopen\t$qstart\t$qend\t$tstart\t$tend\t$eval\t$bits\t$tmscore\n");
 				}
 				elsif($query_count < $best){
-					print ALL ("$predicted_structure\t$pred_struct_source\t$fident\t$alnlen\t$mismatch\t$gapopen\t$qstart\t$qend\t$tstart\t$tend\t$eval\t$bits\t$tmscore\n");
+					print ALL ("$predicted_structure\t$model_number\t$pred_struct_source\t$fident\t$alnlen\t$mismatch\t$gapopen\t$qstart\t$qend\t$tstart\t$tend\t$eval\t$bits\t$tmscore\n");
 				}
 				$query_count++;
 			}

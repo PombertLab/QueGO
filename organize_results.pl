@@ -233,67 +233,71 @@ my %struct_results;
 
 foreach my $hom_tool (sort(keys(%struct_files))){
 	my $struct_file = $struct_files{$hom_tool};
-	if (-f $struct_file){
-		open IN, "<", $struct_file or die "Unable to access $struct_file: $!\n";
+	if ($struct_file){
+		if (-f $struct_file){
+			open IN, "<", $struct_file or die "Unable to access $struct_file: $!\n";
 
-		## Track PDB code
-		my $struct;
+			## Track PDB code
+			my $struct;
 
-		while (my $line = <IN>){
-			chomp($line);
-			unless($line eq "" || $line =~ /^###/){
-				if ($line =~ /^## (\w+)/){
-					$struct = uc($1);
-				}
-				else{
+			while (my $line = <IN>){
+				chomp($line);
+				unless($line eq "" || $line =~ /^###/){
+					if ($line =~ /^## (\w+)/){
+						$struct = uc($1);
+					}
+					else{
 
-					if($struct_link{$struct}){
+						if($struct_link{$struct}){
 
-						my ($prot_name, $accession) = @{$struct_link{$struct}};
-						
-						## Convert line to array
-						my @data = split("\t",$line);
-						
-						my $locus = shift(@data);
-						unshift(@data,$struct);
-						unshift(@data,$accession);
+							my ($prot_name, $accession) = @{$struct_link{$struct}};
+							
+							## Convert line to array
+							my @data = split("\t",$line);
+							
+							my $locus = shift(@data);
+							my $model = shift(@data);
 
-						## Use only the best hit per locus
-						if ($hom_tool eq "FOLDSEEK"){
-							if ($all_results{$prot_name}{$locus}){
-								unless ($all_results{$prot_name}{$locus}{"FOLDSEEK"}){
-									@{$all_results{$prot_name}{$locus}{"FOLDSEEK"}} = @data;
-									@{$struct_results{$hom_tool}{$prot_name}{$locus}} = @data;
-									$all_results{$prot_name}{$locus}{"SCORE"} += $data[13];
+							unshift(@data,$struct);
+							unshift(@data,$accession);
+							
+							## Use only the best hit per locus
+							if ($hom_tool eq "FOLDSEEK"){
+								if ($all_results{$prot_name}{$locus}){
+									unless ($all_results{$prot_name}{$locus}{"FOLDSEEK"}){
+										@{$all_results{$prot_name}{$locus}{"FOLDSEEK"}} = (@data,$model);
+										@{$struct_results{$hom_tool}{$prot_name}{$locus}} = (@data,$model);
+										$all_results{$prot_name}{$locus}{"SCORE"} += $data[13];
+										$loci_count{"stc"}{$locus} ++;
+									}
+								}
+								else{
+									@{$all_results{$prot_name}{$locus}{"FOLDSEEK"}} = (@data,$model);
+									$all_results{$prot_name}{$locus}{"SCORE"} = $data[13];
 									$loci_count{"stc"}{$locus} ++;
 								}
 							}
-							else{
-								@{$all_results{$prot_name}{$locus}{"FOLDSEEK"}} = @data;
-								$all_results{$prot_name}{$locus}{"SCORE"} = $data[13];
-								$loci_count{"stc"}{$locus} ++;
-							}
-						}
-						elsif ($hom_tool eq "GESAMT"){
-							if ($all_results{$prot_name}{$locus}){
-								unless ($all_results{$prot_name}{$locus}{"GESAMT"}){
-									@{$all_results{$prot_name}{$locus}{"GESAMT"}} = @data;
-									@{$struct_results{$hom_tool}{$prot_name}{$locus}} = @data;
-									$all_results{$prot_name}{$locus}{"SCORE"} += $data[3];
+							elsif ($hom_tool eq "GESAMT"){
+								if ($all_results{$prot_name}{$locus}){
+									unless ($all_results{$prot_name}{$locus}{"GESAMT"}){
+										@{$all_results{$prot_name}{$locus}{"GESAMT"}} = (@data,$model);
+										@{$struct_results{$hom_tool}{$prot_name}{$locus}} = (@data,$model);
+										$all_results{$prot_name}{$locus}{"SCORE"} += $data[3];
+										$loci_count{"stc"}{$locus} ++;
+									}
+								}
+								else{
+									@{$all_results{$prot_name}{$locus}{"GESAMT"}} = (@data,$model);
+									$all_results{$prot_name}{$locus}{"SCORE"} = $data[3];
 									$loci_count{"stc"}{$locus} ++;
 								}
-							}
-							else{
-								@{$all_results{$prot_name}{$locus}{"GESAMT"}} = @data;
-								$all_results{$prot_name}{$locus}{"SCORE"} = $data[3];
-								$loci_count{"stc"}{$locus} ++;
 							}
 						}
 					}
 				}
 			}
+			close IN;
 		}
-		close IN;
 	}
 }
 
@@ -311,7 +315,7 @@ foreach my $prot (sort(keys(%seq_results))){
 			print OUT "\t".$annotations{$locus}."\t";
 		}
 		else{
-			print OUT "\t-";
+			print OUT "\t-\t";
 		}
 		print OUT "".(join("\t",@{$seq_results{$prot}{$locus}}))."\n";
 	}
@@ -326,7 +330,7 @@ close OUT;
 foreach my $hom_tool (keys(%struct_results)){
 	open OUT, ">", $outdir."/structure_results.tsv" or die "Unable to write to file $outdir/structure_results.tsv: $!\n";
 	if ($hom_tool eq "GESAMT"){
-		print OUT "### LOCUS\tANNOTATION\tACCESSION\tPDB\tSOURCE\tQSCORE\tR.M.S.D.\tSEQID\tNalign\tnRES\n\n";
+		print OUT "### LOCUS\tANNOTATION\tACCESSION\tPDB\tSOURCE\tMODEL #\tQSCORE\tR.M.S.D.\tSEQID\tNalign\tnRES\n\n";
 		foreach my $prot (sort(keys(%{$struct_results{$hom_tool}}))){
 			print OUT "## $prot\n";
 			foreach my $locus (sort{$struct_results{$hom_tool}{$prot}{$b}[3] <=> $struct_results{$hom_tool}{$prot}{$a}[3]}(keys(%{$struct_results{$hom_tool}{$prot}}))){
@@ -334,15 +338,16 @@ foreach my $hom_tool (keys(%struct_results)){
 					print OUT $locus."\t".$annotations{$locus}."\t";
 				}
 				else{
-					print OUT "\t-";
+					print OUT $locus."\t-\t";
 				}
-				print OUT (join("\t",@{$struct_results{$hom_tool}{$prot}{$locus}}))."\n";
+				my $model = pop(@{$struct_results{$hom_tool}{$prot}{$locus}});
+				print OUT (join("\t",@{$struct_results{$hom_tool}{$prot}{$locus}}[0..2]))."\t".$model."\t".(join("\t",@{$struct_results{$hom_tool}{$prot}{$locus}}[3..(scalar(@{$struct_results{$hom_tool}{$prot}{$locus}}))-1]))."\n";
 			}
 			print OUT "\n";
 		}
 	}
 	elsif ($hom_tool eq "FOLDSEEK"){
-		print OUT "### LOCUS\tANNOTATION\tACCESSION\tPDB\tSOURCE\tFIDENT\tALNLEN\tMISMATCH\tGAPOPEN\tQSTART\tQEND\tTSTART\tTEND\tEVALUE\tBITS\tTMSCORE\n\n";
+		print OUT "### LOCUS\tANNOTATION\tACCESSION\tPDB\tSOURCE\tMODEL #\tFIDENT\tALNLEN\tMISMATCH\tGAPOPEN\tQSTART\tQEND\tTSTART\tTEND\tEVALUE\tBITS\tTMSCORE\n\n";
 		foreach my $prot (sort(keys(%{$struct_results{$hom_tool}}))){
 			print OUT "## $prot\n";
 			foreach my $locus (sort{$struct_results{$hom_tool}{$prot}{$b}[13] <=> $struct_results{$hom_tool}{$prot}{$a}[13]}(keys(%{$struct_results{$hom_tool}{$prot}}))){
@@ -350,9 +355,10 @@ foreach my $hom_tool (keys(%struct_results)){
 					print OUT $locus."\t".$annotations{$locus}."\t";
 				}
 				else{
-					print OUT "\t-";
+					print OUT $locus."\t-\t";
 				}
-				print OUT (join("\t",@{$struct_results{$hom_tool}{$prot}{$locus}}))."\n";
+				my $model = pop(@{$struct_results{$hom_tool}{$prot}{$locus}});
+				print OUT (join("\t",@{$struct_results{$hom_tool}{$prot}{$locus}}[0..2]))."\t".$model."\t".(join("\t",@{$struct_results{$hom_tool}{$prot}{$locus}}[3..(scalar(@{$struct_results{$hom_tool}{$prot}{$locus}}))-1]))."\n";
 			}
 			print OUT "\n";
 		}
@@ -369,7 +375,7 @@ my %loci_record;
 # print OUT "### LOCUS\tANNOTATION\tSEQ_HOM_EVAL\tACCESSION\t(SEQ_HOM_HIT/SEQ_HOM_MATCHES)\t";
 # print OUT "STC_HOM_QSCORE\tSTC_PDB\tPDB_SOURCE\t(STC_HOM_HIT/STC_HOM_MATCHES)\n\n";
 
-print OUT "### LOCUS\tANNOTATION\tSEQ_HOM_EVALUE\tSEQ_FASTA\tFOLDSEEK_TMSCORE\tFOLDSEEK_PDB\tFOLDSEEK_DB\tGESAMT_QSCORE\tGESAMT_PDB\tGESAMT_DB\n\n";
+print OUT "### LOCUS\tANNOTATION\tSEQ_HOM_EVALUE\tSEQ_FASTA\tFOLDSEEK_TMSCORE\tFOLDSEEK_PDB\tFOLDSEEK_DB\tMODEL #\tGESAMT_QSCORE\tGESAMT_PDB\tGESAMT_DB\tMODEL #\n\n";
 
 foreach my $prot (sort(keys(%proteins))){
 
@@ -415,20 +421,20 @@ foreach my $prot (sort(keys(%proteins))){
 				my @stc_data = @{$all_results{$prot}{$locus}{"FOLDSEEK"}};
 				my ($stc_accession, $stc_pdb, $stc_source) = @stc_data[0..2];
 				my ($tmscore) = $stc_data[13];
-				print OUT "\t".$tmscore."\t".$stc_pdb."\t".$stc_source;
+				print OUT "\t".$tmscore."\t".$stc_pdb."\t".$stc_source."\t".$stc_data[-1];
 			}
 			else{
-				print OUT "\t-"x3;
+				print OUT "\t-"x4;
 			}
 
 			if ($all_results{$prot}{$locus}{"GESAMT"}){
 				$loci_record{"stc"}{$locus}++;
 				my @stc_data = @{$all_results{$prot}{$locus}{"GESAMT"}};
 				my ($stc_accession, $stc_pdb, $stc_source, $qscore) = @stc_data[0..3];
-				print OUT "\t".$qscore."\t".$stc_pdb."\t".$stc_source;
+				print OUT "\t".$qscore."\t".$stc_pdb."\t".$stc_source."\t".$stc_data[-1];
 			}
 			else{
-				print OUT "\t-"x3;
+				print OUT "\t-"x4;
 			}
 			print OUT "\n";
 		}
