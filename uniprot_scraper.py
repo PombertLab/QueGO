@@ -1,8 +1,8 @@
 #!/usr/bin/python
 
 name = "uniprot_scraper.py"
-version = "1.5.5"
-updated = "2022-07-26"
+version = "1.7.1"
+updated = "2022-10-18"
 
 usage = f"""\n
 NAME		{name}
@@ -104,6 +104,30 @@ from selenium.webdriver.firefox.options import Options
 OPS = open(f"{outdir}/uniprot_scraper.log","w")
 OPS.write(f">NAME\n  {name}\n\n")
 OPS.write(f">VERSION\n  {version}\n\n")
+
+previous_downloads = {}
+accession = ""
+data_key = ""
+if path.isfile(f"{outdir}/metadata.log"):
+	META = open(f"{outdir}/metadata.log","r")
+	for line in META:
+		line = line.replace("\n","")
+		if line:
+			if line[0] == ">":
+				accession = line.replace(">","",1)
+			elif line[0:2] == "\t\t":
+				if accession in previous_downloads.keys():
+					if data_key in previous_downloads[accession].keys():
+						previous_downloads[accession][data_key] = previous_downloads[accession][data_key] + "\n\t\t" + line.replace("\t\t","",1)
+					else:
+						previous_downloads[accession][data_key] = line.replace("\t\t","",1)
+				else:
+					previous_downloads[accession] = {}
+					previous_downloads[accession][data_key] = line.replace("\t\t","",1)
+			elif line[0] == "\t":
+				data_key = line.replace("\t","")
+	META.close()
+
 
 ## META stores the accession numbers, the organism names, the FASTA and 3D Structure links, and 3D structure features
 META = open(f"{outdir}/metadata.log","w")
@@ -257,10 +281,30 @@ FILE.close()
 
 ## Begin trolling accession pages for metadata and links
 
-print("\nAcquiring metadata:")
+print("\nAcquiring metadata:\n")
 
 scrap_results = {}
-for accession,page in accession_numbers:
+for count,(accession,page) in enumerate(sorted(accession_numbers,key=lambda x: x[0])):
+
+	print(f"[{count+1:0>{len(str(len(accession_numbers)))}}/{len(accession_numbers)}]\t{accession}")
+
+	if accession in previous_downloads.keys():
+		print(f"\tData previously acquired... Skipping...")
+		META.write(f">{accession}\n")
+		META.write(f"\tPROTEIN_NAME\n")
+		META.write(f"\t\t{previous_downloads[accession]['PROTEIN_NAME']}\n")
+		META.write(f"\tORGANISM_NAME\n")
+		META.write(f"\t\t{previous_downloads[accession]['ORGANISM_NAME']}\n")
+		META.write(f"\tFEATURES\n")
+		META.write(f"\t\t{previous_downloads[accession]['FEATURES']}\n")
+		META.write(f"\tSTRUCTURES\n")
+		
+		if 'STRUCTURES' in previous_downloads[accession].keys():
+			META.write(f"\t\t{previous_downloads[accession]['STRUCTURES']}\n")
+		else:
+			META.write(f"\n")
+		
+		continue
 
 	## acession = [FASTA link,features,[structures]]
 	scrap_results[accession] = [f"https://rest.uniprot.org/uniprotkb/{accession}.fasta","",[]]
@@ -286,29 +330,35 @@ for accession,page in accession_numbers:
 			next
 
 
-	list_content = name_content.find_elements_by_css_selector("div.card__content > ul")
+	list_content = name_content.find_elements_by_css_selector("div.card__content > *")
 
 	## Index of protein info in list_content
-	protein_index = [i.get_attribute("data-article-id") for i in name_content.find_elements_by_css_selector("h3")].index("protein_names")
+	protein_index = [i.get_attribute("data-article-id") for i in list_content].index("protein_names") + 1
 	## Index of name info in list_content
-	name_index = [i.get_attribute("data-article-id") for i in name_content.find_elements_by_css_selector("h3")].index("organism-name")
+	name_index = [i.get_attribute("data-article-id") for i in list_content].index("organism-name") + 1
 
 	## Get protein name
 	prot_name = list_content[protein_index].find_element_by_css_selector("strong").text
 	prot_name = prot_name.replace("\n","")
 	## Remove "curate" and "publication" text from the protein name as it is not relevant!
-	for alt in list_content[protein_index].find_element_by_css_selector("strong").find_elements_by_css_selector("button"):
+	for alt in list_content[protein_index].find_elements_by_css_selector("button"):
 		prot_name = prot_name.replace(alt.text,"")
 
 	## Get organism name
-	org_name = list_content[name_index].find_element_by_css_selector("a").text
+	org_name = list_content[name_index].find_element_by_css_selector("div > div.decorated-list-item__content").text.replace("\n","")
+	## Remove "curate" and "publication" text from the protein name as it is not relevant!
+	for alt in list_content[name_index].find_elements_by_css_selector("button"):
+		org_name = org_name.replace(alt.text,"")
 
 	META.write(f">{accession}\n")
 	META.write(f"\tPROTEIN_NAME\n\t\t{prot_name}\n")
 	META.write(f"\tORGANISM_NAME\n\t\t{org_name}\n")
-	META.write(f"\tFASTA\n\t\thttps://rest.uniprot.org/uniprotkb/{accession}.fasta\n")
-	
-	print(f"\t{accession} ({prot_name})")
+	print(f"\t{accession} ({prot_name})\n")
+	if (not path.exists(f"{fastadir}/{accession}.fasta")):
+		print(f"\t\tDownloading FASTA file for {accession}")
+		system(f"wget https://rest.uniprot.org/uniprotkb/{accession}.fasta -O {fastadir}/{accession}.fasta 1>/dev/null 2>>{outdir}/download.error")
+	else:
+		print(f"\t\tFASTA previously downloaded for {accession}...Skipping...")
 
 	##################################################
 	## Structure Metadata
@@ -410,6 +460,49 @@ for accession,page in accession_numbers:
 			structure_data.append([pdb,chain,method,download_link])
 			if method in methods:
 				META.write(f"\t\t{pdb}\t{chain}\t{method}\t{download_link}\n")
+
+		def get_pdb(struct_link,pdb_code,method,chain):
+
+			if ((not path.isdir(f"{pdbdir}/{pdb_code}")) and (not path.isfile(f"{pdbdir}/{pdb_code}.pdb.gz"))):
+				system(f"wget {struct_link} -O {pdbdir}/{pdb_code}.pdb 1>/dev/null 2>>{outdir}/download.error")
+				print(f"\t\tDownloading {struct_link}")
+			else:
+				print(f"\t\tSkipping {pdb_code}, already downloaded")
+
+			if method != "Predicted":
+				if (not path.isdir(f"{pdbdir}/{pdb_code}")):
+					system(f"""
+						{pipeline_location}/split_PDB.pl \\
+						  -p {pdbdir}/{pdb_code}.pdb \\
+						  -o {pdbdir}/{pdb_code}
+					""")
+				system(f"""
+					if [ -f {pdbdir}/{pdb_code}/{pdb_code}_{chain}.pdb ]
+					then
+						if ! [ -f {pdbdir}/{pdb_code}_{chain}.pdb.gz ]
+						then
+							mv {pdbdir}/{pdb_code}/{pdb_code}_{chain}.pdb {pdbdir}
+							gzip {pdbdir}/{pdb_code}_{chain}.pdb
+						fi
+					fi
+				""")
+			else:
+				if not path.isfile(f"{pdbdir}/{pdb_code}.pdb.gz"):
+					system(f"""
+						gzip {pdbdir}/{pdb_code}.pdb
+					""")
+		
+		for set in structure_data:
+
+			pdb, chain, method, download_link = set
+
+			if methods:
+				if method in methods:
+					get_pdb(download_link,pdb,method,chain)
+			else:
+				get_pdb(download_link,pdb,method,chain)
+
+		print()
 		
 		scrap_results[accession][2] = structure_data
 
@@ -421,60 +514,6 @@ print()
 
 ## Close the scraper, we are done surfing
 driver.close()
-
-downloaded = []
-
-## Iterate over all UniProt accession found
-
-for accession in scrap_results.keys():
-
-	fasta, features, structures = scrap_results[accession]
-
-	print(f"Downloading files for {accession}")
-
-	if download_fasta:
-
-		print(f"\t{fasta}\n")
-		system(f"wget {fasta} -O {fastadir}/{accession}.fasta 1>/dev/null 2>{outdir}/download.error")
-
-	if download_structures:
-		
-		print("Download structures!")
-
-		def get_pdb(struct_link,pdb_code,method,chain):
-
-			if pdb_code not in downloaded:
-				print(f"\t{struct_link}")
-				system(f"wget {struct_link} -O {pdbdir}/{pdb_code}.pdb 1>/dev/null 2>{outdir}/download.error")
-				downloaded.append(pdb_code)
-			else:
-				print(f"\tSkipping {pdb_code}, already downloaded")
-
-			if method != "Predicted":
-				if not (path.isdir(f"{pdbdir}/{pdb_code}")):
-					system(f"""
-						{pipeline_location}/split_PDB.pl \\
-						  -p {pdbdir}/{pdb_code}.pdb \\
-						  -o {pdbdir}/{pdb_code}
-					""")
-				system(f"""
-					if [ -f {pdbdir}/{pdb_code}/{pdb_code}_{chain}.pdb ]
-					then
-						mv {pdbdir}/{pdb_code}/{pdb_code}_{chain}.pdb {pdbdir}
-						gzip {pdbdir}/{pdb_code}_{chain}.pdb
-					fi
-				""")
-		
-		for set in structures:
-
-			pdb, chain, method, download_link = set
-
-			if methods:
-				if method in methods:
-					get_pdb(download_link,pdb,method,chain)
-			else:
-				get_pdb(download_link,pdb,method,chain)
-	print()
 
 if download_structures:
 	## Remove unneeded PDBs to prevent unwanted hits being returned
