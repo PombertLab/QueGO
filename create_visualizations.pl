@@ -1,8 +1,8 @@
 #!/usr/bin/perl
 
-my $name = "prepare_visualizations.pl";
-my $version = "0.7.5";
-my $updated = "2022-08-31";
+my $name = "create_visualizations.pl";
+my $version = "0.7.6";
+my $updated = "2022-09-03";
 
 use strict;
 use warnings;
@@ -20,13 +20,11 @@ SYNOPSIS	Creates ChimeraX visual comparisons between .pdb structures
 		and matches found with QueGO
 
 USAGE	${name} \\
-		-a gesamt \\
-		-m GESAMT.RCSB.matches \\
+		-m RESULTS/compiled_results.tsv \\
 		-u /media/FatCat_1/julian/QueGO/UniProt \\
 		-p /media/FatCat_1/Microsporidia/Intestinalis/3DFI/FOLDING/ALPHAFOLD_3D_PARSED
 
 OPTIONS
--a (--align)	3D alignment tool: foldseek or gesamt [Default: gesamt]
 -m (--match)	Foldseek/GESAMT match file parsed by organize_results.pl
 -p (--prov)	Directory containing provided .pdb files
 -u (--uni)	Directory containing UniProt scrap .pdb files
@@ -34,14 +32,12 @@ OPTIONS
 EXIT
 die "\n\n$usage\n\n" unless @ARGV;
 
-my $aligner = 'gesamt';
 my $match_file;
 my @provided_struct;
 my $uniprot_struct;
 my $outdir = './3D_Visualizations';
 
 GetOptions(
-	'a|align=s' => \$aligner,
 	'm|match=s' => \$match_file,
 	'p|prov=s@{1,}' => \@provided_struct,
 	'u|uni=s' => \$uniprot_struct,
